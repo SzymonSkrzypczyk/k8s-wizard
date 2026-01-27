@@ -6,11 +6,12 @@ A terminal-based wizard for running common kubectl commands with an intuitive, g
 
 - **Wizard-style interface**: Step-by-step guidance through kubectl operations
 - **Supported commands**:
-  - `kubectl get pods`
-  - `kubectl get deployments`
-  - `kubectl describe pod <name>`
-  - `kubectl logs <pod-name>`
-- **Favourites**: Save frequently used commands for quick access
+  - `kubectl get pods` (with flags: -o wide, -o yaml, -o json, --show-labels, -A)
+  - `kubectl get deployments` (with flags: -o wide, -o yaml, -o json, --show-labels, -A)
+  - `kubectl describe pod <name>` (with flags: --show-events=true)
+  - `kubectl logs <pod-name>` (with flags: -f, --tail=N, --since=Xm/h, --previous)
+- **Common flags/options**: Select from commonly used kubectl flags for each command
+- **Favourites**: Save frequently used commands for quick access, rename them as needed
 - **Scrollable output**: View command results in a scrollable viewport
 - **Clean architecture**: Modular design for easy extension
 
@@ -59,7 +60,13 @@ When you start the application, you'll see three options:
    - **Describe**: Get detailed information about a specific resource
    - **Logs**: View logs from a specific pod
 4. If needed, select a specific resource name from the list
-5. Preview the command and choose to:
+5. Select flags/options:
+   - **No flags**: Execute without additional options
+   - **Common flags**: Choose from frequently used kubectl flags
+     - For `get`: -o wide, -o yaml, -o json, --show-labels, -A (all namespaces)
+     - For `describe`: --show-events=true
+     - For `logs`: -f (follow), --tail=N, --since=Xm/h, --previous
+6. Preview the complete command and choose to:
    - **Execute**: Run the command immediately
    - **Save as Favourite**: Save for later use
    - **Back**: Return to previous screen

@@ -12,6 +12,8 @@ const (
 	ActionSelectionScreen
 	// ResourceNameSelectionScreen allows selecting specific resource name
 	ResourceNameSelectionScreen
+	// FlagsSelectionScreen allows selecting command flags/options
+	FlagsSelectionScreen
 	// CommandPreviewScreen shows the command before execution
 	CommandPreviewScreen
 	// CommandOutputScreen shows the command output
@@ -68,7 +70,7 @@ func (a Action) String() string {
 }
 
 // buildCommand constructs the kubectl command string based on selections
-func buildCommand(resource ResourceType, action Action, resourceName string) string {
+func buildCommand(resource ResourceType, action Action, resourceName string, flags []string) string {
 	cmd := "kubectl "
 
 	switch action {
@@ -82,6 +84,13 @@ func buildCommand(resource ResourceType, action Action, resourceName string) str
 		cmd += "describe pod " + resourceName
 	case ActionLogs:
 		cmd += "logs " + resourceName
+	}
+
+	// Append flags if any
+	for _, flag := range flags {
+		if flag != "" {
+			cmd += " " + flag
+		}
 	}
 
 	return cmd

@@ -27,6 +27,7 @@ type Model struct {
 	selectedResource     ResourceType
 	selectedAction       Action
 	selectedResourceName string
+	selectedFlags        []string // Selected command flags
 	currentCommand       string
 	renamingFavouriteIdx int // Index of favourite being renamed
 
@@ -269,6 +270,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 	case ResourceNameSelectionScreen:
 		return m.handleResourceNameSelection()
 
+	case FlagsSelectionScreen:
+		return m.handleFlagsSelection()
+
 	case CommandPreviewScreen:
 		return m.handleCommandPreviewSelection()
 
@@ -368,6 +372,43 @@ func (m Model) navigateToFavouritesList() Model {
 	return m
 }
 
+func (m Model) navigateToFlagsSelection() Model {
+	// Build list of common flags based on action
+	var items []list.Item
+
+	switch m.selectedAction {
+	case ActionGet:
+		items = []list.Item{
+			ui.NewSimpleItem("No flags", "Execute without additional flags"),
+			ui.NewSimpleItem("-o wide", "Show additional columns"),
+			ui.NewSimpleItem("-o yaml", "Output in YAML format"),
+			ui.NewSimpleItem("-o json", "Output in JSON format"),
+			ui.NewSimpleItem("--show-labels", "Show labels"),
+			ui.NewSimpleItem("-A", "All namespaces"),
+		}
+	case ActionDescribe:
+		items = []list.Item{
+			ui.NewSimpleItem("No flags", "Execute without additional flags"),
+			ui.NewSimpleItem("--show-events=true", "Show events"),
+		}
+	case ActionLogs:
+		items = []list.Item{
+			ui.NewSimpleItem("No flags", "Execute without additional flags"),
+			ui.NewSimpleItem("-f", "Follow log output"),
+			ui.NewSimpleItem("--tail=100", "Show last 100 lines"),
+			ui.NewSimpleItem("--tail=50", "Show last 50 lines"),
+			ui.NewSimpleItem("--since=1h", "Show logs from last hour"),
+			ui.NewSimpleItem("--since=5m", "Show logs from last 5 minutes"),
+			ui.NewSimpleItem("--previous", "Show logs from previous container"),
+		}
+	}
+
+	m.list = ui.NewList(items, "Select Flags/Options", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = FlagsSelectionScreen
+	return m
+}
+
 func (m Model) navigateToSaveFavourite() Model {
 	m.textInput.SetValue("")
 	m.textInput.Focus()
@@ -402,11 +443,13 @@ func (m Model) navigateBack() Model {
 		return m.navigateToResourceSelection()
 	case ResourceNameSelectionScreen:
 		return m.navigateToActionSelection()
-	case CommandPreviewScreen:
+	case FlagsSelectionScreen:
 		if m.selectedAction == ActionGet {
 			return m.navigateToActionSelection()
 		}
 		return m.navigateToResourceSelection()
+	case CommandPreviewScreen:
+		return m.navigateToFlagsSelection()
 	case FavouritesListScreen:
 		return m.navigateToMainMenu()
 	case SaveFavouriteScreen:
@@ -469,9 +512,8 @@ func (m Model) handleActionSelection() (tea.Model, tea.Cmd) {
 	switch title {
 	case "Get":
 		m.selectedAction = ActionGet
-		// For 'get' commands, we can go directly to preview
-		m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, "")
-		return m.navigateToCommandPreview(), nil
+		// For 'get' commands, go to flags selection
+		return m.navigateToFlagsSelection(), nil
 
 	case "Describe":
 		m.selectedAction = ActionDescribe
@@ -494,8 +536,30 @@ func (m Model) handleResourceNameSelection() (tea.Model, tea.Cmd) {
 	}
 
 	m.selectedResourceName = selected.(ui.SimpleItem).Title()
-	m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName)
 
+	// Go to flags selection
+	return m.navigateToFlagsSelection(), nil
+}
+
+func (m Model) handleFlagsSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+
+	// Store selected flags
+	if title == "No flags" {
+		m.selectedFlags = []string{}
+	} else {
+		m.selectedFlags = []string{title}
+	}
+
+	// Build command with flags
+	m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
+
+	// Navigate to command preview
 	return m.navigateToCommandPreview(), nil
 }
 
