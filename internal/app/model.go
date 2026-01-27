@@ -223,6 +223,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.handleEnterKey()
 
+	case " ":
+		// Space bar toggles flags in flags selection screen
+		if m.currentScreen == FlagsSelectionScreen {
+			return m.toggleFlag(), nil
+		}
+
 	case "d":
 		// Delete favourite if in favourites list
 		if m.currentScreen == FavouritesListScreen && m.favStore != nil {
@@ -373,37 +379,43 @@ func (m Model) navigateToFavouritesList() Model {
 }
 
 func (m Model) navigateToFlagsSelection() Model {
+	// Reset selected flags
+	m.selectedFlags = []string{}
+
 	// Build list of common flags based on action
 	var items []list.Item
 
 	switch m.selectedAction {
 	case ActionGet:
 		items = []list.Item{
-			ui.NewSimpleItem("No flags", "Execute without additional flags"),
-			ui.NewSimpleItem("-o wide", "Show additional columns"),
-			ui.NewSimpleItem("-o yaml", "Output in YAML format"),
-			ui.NewSimpleItem("-o json", "Output in JSON format"),
-			ui.NewSimpleItem("--show-labels", "Show labels"),
-			ui.NewSimpleItem("-A", "All namespaces"),
+			ui.NewSimpleItem("[ ] -o wide", "Show additional columns"),
+			ui.NewSimpleItem("[ ] -o yaml", "Output in YAML format"),
+			ui.NewSimpleItem("[ ] -o json", "Output in JSON format"),
+			ui.NewSimpleItem("[ ] --show-labels", "Show labels"),
+			ui.NewSimpleItem("[ ] -A", "All namespaces"),
+			ui.NewSimpleItem("---", ""),
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	case ActionDescribe:
 		items = []list.Item{
-			ui.NewSimpleItem("No flags", "Execute without additional flags"),
-			ui.NewSimpleItem("--show-events=true", "Show events"),
+			ui.NewSimpleItem("[ ] --show-events=true", "Show events"),
+			ui.NewSimpleItem("---", ""),
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	case ActionLogs:
 		items = []list.Item{
-			ui.NewSimpleItem("No flags", "Execute without additional flags"),
-			ui.NewSimpleItem("-f", "Follow log output"),
-			ui.NewSimpleItem("--tail=100", "Show last 100 lines"),
-			ui.NewSimpleItem("--tail=50", "Show last 50 lines"),
-			ui.NewSimpleItem("--since=1h", "Show logs from last hour"),
-			ui.NewSimpleItem("--since=5m", "Show logs from last 5 minutes"),
-			ui.NewSimpleItem("--previous", "Show logs from previous container"),
+			ui.NewSimpleItem("[ ] -f", "Follow log output"),
+			ui.NewSimpleItem("[ ] --tail=100", "Show last 100 lines"),
+			ui.NewSimpleItem("[ ] --tail=50", "Show last 50 lines"),
+			ui.NewSimpleItem("[ ] --since=1h", "Show logs from last hour"),
+			ui.NewSimpleItem("[ ] --since=5m", "Show logs from last 5 minutes"),
+			ui.NewSimpleItem("[ ] --previous", "Show logs from previous container"),
+			ui.NewSimpleItem("---", ""),
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	}
 
-	m.list = ui.NewList(items, "Select Flags/Options", m.width, m.height-4)
+	m.list = ui.NewList(items, "Select Flags (Space to toggle, Enter when done)", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = FlagsSelectionScreen
 	return m
@@ -549,18 +561,76 @@ func (m Model) handleFlagsSelection() (tea.Model, tea.Cmd) {
 
 	title := selected.(ui.SimpleItem).Title()
 
-	// Store selected flags
-	if title == "No flags" {
-		m.selectedFlags = []string{}
-	} else {
-		m.selectedFlags = []string{title}
+	// Check if user selected "Done"
+	if title == "Done (Continue)" {
+		// Build command with selected flags
+		m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
+		// Navigate to command preview
+		return m.navigateToCommandPreview(), nil
 	}
 
-	// Build command with flags
-	m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
+	// Ignore separator
+	if title == "---" {
+		return m, nil
+	}
 
-	// Navigate to command preview
-	return m.navigateToCommandPreview(), nil
+	// Toggle flag selection (space bar will call this via handleKeyPress)
+	return m.toggleFlag(), nil
+}
+
+// toggleFlag toggles the selection state of the current flag
+func (m Model) toggleFlag() Model {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+
+	// Ignore Done and separator
+	if title == "Done (Continue)" || title == "---" {
+		return m
+	}
+
+	// Extract flag from title (remove checkbox)
+	var flag string
+	if len(title) > 4 {
+		flag = title[4:] // Remove "[ ] " or "[x] "
+	}
+
+	// Check if flag is already selected
+	flagIndex := -1
+	for i, f := range m.selectedFlags {
+		if f == flag {
+			flagIndex = i
+			break
+		}
+	}
+
+	// Get current index in list
+	idx := m.list.Index()
+
+	// Toggle flag
+	var newTitle string
+	if flagIndex >= 0 {
+		// Remove flag
+		m.selectedFlags = append(m.selectedFlags[:flagIndex], m.selectedFlags[flagIndex+1:]...)
+		newTitle = "[ ] " + flag
+	} else {
+		// Add flag
+		m.selectedFlags = append(m.selectedFlags, flag)
+		newTitle = "[x] " + flag
+	}
+
+	// Update list item
+	items := m.list.Items()
+	if idx >= 0 && idx < len(items) {
+		desc := items[idx].(ui.SimpleItem).Description()
+		items[idx] = ui.NewSimpleItem(newTitle, desc)
+		m.list.SetItems(items)
+	}
+
+	return m
 }
 
 func (m Model) handleCommandPreviewSelection() (tea.Model, tea.Cmd) {

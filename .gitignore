@@ -4,7 +4,6 @@
 *.dll
 *.so
 *.dylib
-kube-wizard
 kube-wizard.exe
 
 # Test binary, built with `go test -c`

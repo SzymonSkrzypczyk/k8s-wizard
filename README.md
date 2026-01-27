@@ -60,13 +60,15 @@ When you start the application, you'll see three options:
    - **Describe**: Get detailed information about a specific resource
    - **Logs**: View logs from a specific pod
 4. If needed, select a specific resource name from the list
-5. Select flags/options:
-   - **No flags**: Execute without additional options
-   - **Common flags**: Choose from frequently used kubectl flags
+5. Select flags/options (multiple selection supported):
+   - Use **Space** to toggle flags on/off (checkboxes: [ ] or [x])
+   - Select **multiple flags** to combine them in one command
+   - Choose **Done (Continue)** when finished selecting
+   - Available flags per command:
      - For `get`: -o wide, -o yaml, -o json, --show-labels, -A (all namespaces)
      - For `describe`: --show-events=true
      - For `logs`: -f (follow), --tail=N, --since=Xm/h, --previous
-6. Preview the complete command and choose to:
+6. Preview the complete command with all selected flags and choose to:
    - **Execute**: Run the command immediately
    - **Save as Favourite**: Save for later use
    - **Back**: Return to previous screen
@@ -80,7 +82,8 @@ When you start the application, you'll see three options:
 
 ### Keyboard Shortcuts
 - **Arrow keys / j/k**: Navigate lists
-- **Enter**: Select item
+- **Enter**: Select item / Confirm selection
+- **Space**: Toggle flag selection (in flags screen)
 - **Esc**: Go back to previous screen
 - **q**: Quit (from main menu) or return to main menu (from other screens)
 - **d**: Delete favourite (in favourites list)
