@@ -6,11 +6,12 @@ A terminal-based wizard for running common kubectl commands with an intuitive, g
 
 - **Wizard-style interface**: Step-by-step guidance through kubectl operations
 - **Supported commands**:
-  - `kubectl get pods` (with flags: -o wide, -o yaml, -o json, --show-labels, -A)
-  - `kubectl get deployments` (with flags: -o wide, -o yaml, -o json, --show-labels, -A)
-  - `kubectl describe pod <name>` (with flags: --show-events=true)
-  - `kubectl logs <pod-name>` (with flags: -f, --tail=N, --since=Xm/h, --previous)
+  - `kubectl get pods` (with flags: -o wide, -o yaml, -o json, --show-labels, -A, -n <namespace>)
+  - `kubectl get deployments` (with flags: -o wide, -o yaml, -o json, --show-labels, -A, -n <namespace>)
+  - `kubectl describe pod <name>` (with flags: --show-events=true, -n <namespace>)
+  - `kubectl logs <pod-name>` (with flags: -f, --tail=N, --since=Xm/h, --previous, -n <namespace>)
 - **Common flags/options**: Select from commonly used kubectl flags for each command
+- **Custom namespace**: Specify a custom namespace with user-provided value
 - **Favourites**: Save frequently used commands for quick access, rename them as needed
 - **Scrollable output**: View command results in a scrollable viewport
 - **Clean architecture**: Modular design for easy extension
@@ -63,12 +64,14 @@ When you start the application, you'll see three options:
 5. Select flags/options (multiple selection supported):
    - Use **Space** to toggle flags on/off (checkboxes: [ ] or [x])
    - Select **multiple flags** to combine them in one command
+   - Select **-n <namespace>** to specify a custom namespace (will prompt for input)
    - Choose **Done (Continue)** when finished selecting
    - Available flags per command:
-     - For `get`: -o wide, -o yaml, -o json, --show-labels, -A (all namespaces)
-     - For `describe`: --show-events=true
-     - For `logs`: -f (follow), --tail=N, --since=Xm/h, --previous
-6. Preview the complete command with all selected flags and choose to:
+     - For `get`: -o wide, -o yaml, -o json, --show-labels, -A (all namespaces), -n <namespace>
+     - For `describe`: --show-events=true, -n <namespace>
+     - For `logs`: -f (follow), --tail=N, --since=Xm/h, --previous, -n <namespace>
+6. If namespace flag was selected, enter the namespace name
+7. Preview the complete command with all selected flags and choose to:
    - **Execute**: Run the command immediately
    - **Save as Favourite**: Save for later use
    - **Back**: Return to previous screen

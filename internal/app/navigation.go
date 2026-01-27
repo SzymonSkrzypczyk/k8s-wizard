@@ -14,6 +14,8 @@ const (
 	ResourceNameSelectionScreen
 	// FlagsSelectionScreen allows selecting command flags/options
 	FlagsSelectionScreen
+	// NamespaceInputScreen allows entering a custom namespace
+	NamespaceInputScreen
 	// CommandPreviewScreen shows the command before execution
 	CommandPreviewScreen
 	// CommandOutputScreen shows the command output

@@ -28,6 +28,8 @@ type Model struct {
 	selectedAction       Action
 	selectedResourceName string
 	selectedFlags        []string // Selected command flags
+	customNamespace      string   // Custom namespace value
+	needsNamespaceInput  bool     // Whether namespace input is needed
 	currentCommand       string
 	renamingFavouriteIdx int // Index of favourite being renamed
 
@@ -189,6 +191,13 @@ func (m Model) View() string {
 		s.WriteString(m.textInput.View())
 		s.WriteString("\n\nPress Enter to save, Esc to cancel")
 
+	case NamespaceInputScreen:
+		s.WriteString("Custom Namespace\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString("Enter namespace name:\n\n")
+		s.WriteString(m.textInput.View())
+		s.WriteString("\n\nPress Enter to continue, Esc to cancel")
+
 	case CommandPreviewScreen:
 		s.WriteString("Command Preview\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
@@ -250,7 +259,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Pass other keys to the active component
 	switch m.currentScreen {
-	case SaveFavouriteScreen, RenameFavouriteScreen:
+	case SaveFavouriteScreen, RenameFavouriteScreen, NamespaceInputScreen:
 		m.textInput, cmd = m.textInput.Update(msg)
 	case CommandOutputScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
@@ -290,6 +299,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case RenameFavouriteScreen:
 		return m.handleRenameFavourite()
+
+	case NamespaceInputScreen:
+		return m.handleNamespaceInput()
 	}
 
 	return m, nil
@@ -379,8 +391,10 @@ func (m Model) navigateToFavouritesList() Model {
 }
 
 func (m Model) navigateToFlagsSelection() Model {
-	// Reset selected flags
+	// Reset selected flags and namespace
 	m.selectedFlags = []string{}
+	m.customNamespace = ""
+	m.needsNamespaceInput = false
 
 	// Build list of common flags based on action
 	var items []list.Item
@@ -393,12 +407,14 @@ func (m Model) navigateToFlagsSelection() Model {
 			ui.NewSimpleItem("[ ] -o json", "Output in JSON format"),
 			ui.NewSimpleItem("[ ] --show-labels", "Show labels"),
 			ui.NewSimpleItem("[ ] -A", "All namespaces"),
+			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
 			ui.NewSimpleItem("---", ""),
 			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	case ActionDescribe:
 		items = []list.Item{
 			ui.NewSimpleItem("[ ] --show-events=true", "Show events"),
+			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
 			ui.NewSimpleItem("---", ""),
 			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
@@ -410,6 +426,7 @@ func (m Model) navigateToFlagsSelection() Model {
 			ui.NewSimpleItem("[ ] --since=1h", "Show logs from last hour"),
 			ui.NewSimpleItem("[ ] --since=5m", "Show logs from last 5 minutes"),
 			ui.NewSimpleItem("[ ] --previous", "Show logs from previous container"),
+			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
 			ui.NewSimpleItem("---", ""),
 			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
@@ -421,8 +438,18 @@ func (m Model) navigateToFlagsSelection() Model {
 	return m
 }
 
+func (m Model) navigateToNamespaceInput() Model {
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = "Enter namespace name"
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = NamespaceInputScreen
+	return m
+}
+
 func (m Model) navigateToSaveFavourite() Model {
 	m.textInput.SetValue("")
+	m.textInput.Placeholder = "Enter favourite name"
 	m.textInput.Focus()
 	m.previousScreen = m.currentScreen
 	m.currentScreen = SaveFavouriteScreen
@@ -468,6 +495,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToCommandPreview()
 	case RenameFavouriteScreen:
 		return m.navigateToFavouritesList()
+	case NamespaceInputScreen:
+		return m.navigateToFlagsSelection()
 	default:
 		return m.navigateToMainMenu()
 	}
@@ -563,6 +592,10 @@ func (m Model) handleFlagsSelection() (tea.Model, tea.Cmd) {
 
 	// Check if user selected "Done"
 	if title == "Done (Continue)" {
+		// Check if namespace input is needed
+		if m.needsNamespaceInput {
+			return m.navigateToNamespaceInput(), nil
+		}
 		// Build command with selected flags
 		m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
 		// Navigate to command preview
@@ -596,6 +629,43 @@ func (m Model) toggleFlag() Model {
 	var flag string
 	if len(title) > 4 {
 		flag = title[4:] // Remove "[ ] " or "[x] "
+	}
+
+	// Special handling for namespace flag
+	if flag == "-n <namespace>" {
+		// Get current index in list
+		idx := m.list.Index()
+		items := m.list.Items()
+
+		// Toggle namespace flag
+		var newTitle string
+		if m.needsNamespaceInput {
+			// Deselect namespace
+			m.needsNamespaceInput = false
+			m.customNamespace = ""
+			newTitle = "[ ] -n <namespace>"
+
+			// Remove any existing -n flag from selectedFlags
+			for i, f := range m.selectedFlags {
+				if len(f) >= 2 && f[:2] == "-n" {
+					m.selectedFlags = append(m.selectedFlags[:i], m.selectedFlags[i+1:]...)
+					break
+				}
+			}
+		} else {
+			// Select namespace (will prompt for input later)
+			m.needsNamespaceInput = true
+			newTitle = "[x] -n <namespace>"
+		}
+
+		// Update list item
+		if idx >= 0 && idx < len(items) {
+			desc := items[idx].(ui.SimpleItem).Description()
+			items[idx] = ui.NewSimpleItem(newTitle, desc)
+			m.list.SetItems(items)
+		}
+
+		return m
 	}
 
 	// Check if flag is already selected
@@ -697,6 +767,25 @@ func (m Model) handleRenameFavourite() (tea.Model, tea.Cmd) {
 	}
 
 	return m, m.renameFavourite(m.renamingFavouriteIdx, newName)
+}
+
+func (m Model) handleNamespaceInput() (tea.Model, tea.Cmd) {
+	namespace := m.textInput.Value()
+	if namespace == "" {
+		return m, nil
+	}
+
+	// Store the namespace value
+	m.customNamespace = namespace
+
+	// Add the namespace flag to selected flags
+	m.selectedFlags = append(m.selectedFlags, "-n "+namespace)
+
+	// Build command with all flags including namespace
+	m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
+
+	// Navigate to command preview
+	return m.navigateToCommandPreview(), nil
 }
 
 // Command execution
