@@ -87,8 +87,6 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages and updates the model (required by Bubble Tea)
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -144,17 +142,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.navigateToFavouritesList(), nil
 	}
 
-	// Update active component based on current screen
-	switch m.currentScreen {
-	case SaveFavouriteScreen:
-		m.textInput, cmd = m.textInput.Update(msg)
-	case CommandOutputScreen:
-		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
-	default:
-		m.list, cmd = ui.UpdateList(m.list, msg)
-	}
-
-	return m, cmd
+	return m, nil
 }
 
 // View renders the UI (required by Bubble Tea)
@@ -202,6 +190,8 @@ func (m Model) View() string {
 
 // handleKeyPress processes keyboard input
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg.String() {
 	case "ctrl+c", "q":
 		if m.currentScreen == MainMenuScreen {
@@ -216,9 +206,28 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		return m.handleEnterKey()
+
+	case "d":
+		// Delete favourite if in favourites list
+		if m.currentScreen == FavouritesListScreen && m.favStore != nil {
+			idx := m.list.Index()
+			if idx >= 0 && idx < len(m.favStore.List()) {
+				return m, m.deleteFavourite(idx)
+			}
+		}
 	}
 
-	return m, nil
+	// Pass other keys to the active component
+	switch m.currentScreen {
+	case SaveFavouriteScreen:
+		m.textInput, cmd = m.textInput.Update(msg)
+	case CommandOutputScreen:
+		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
+	default:
+		m.list, cmd = ui.UpdateList(m.list, msg)
+	}
+
+	return m, cmd
 }
 
 // handleEnterKey processes the Enter key based on current screen
