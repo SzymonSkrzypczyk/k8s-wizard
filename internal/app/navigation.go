@@ -20,6 +20,8 @@ const (
 	FavouritesListScreen
 	// SaveFavouriteScreen allows naming a favourite
 	SaveFavouriteScreen
+	// RenameFavouriteScreen allows renaming an existing favourite
+	RenameFavouriteScreen
 )
 
 // ResourceType represents the type of Kubernetes resource

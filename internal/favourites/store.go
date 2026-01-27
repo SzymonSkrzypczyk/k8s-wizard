@@ -87,3 +87,13 @@ func (s *Store) Get(index int) (Favourite, bool) {
 	}
 	return s.favourites[index], true
 }
+
+// Rename renames a favourite by index and saves to disk
+func (s *Store) Rename(index int, newName string) error {
+	if index < 0 || index >= len(s.favourites) {
+		return nil
+	}
+
+	s.favourites[index].Name = newName
+	return s.Save()
+}

@@ -68,6 +68,7 @@ When you start the application, you'll see three options:
 - From the main menu, select "Favourites"
 - Press Enter on a favourite to execute it
 - Press 'd' to delete a favourite
+- Press 'r' to rename a favourite
 - Favourites are stored in `~/kube-wizard-favourites.json`
 
 ### Keyboard Shortcuts
@@ -76,6 +77,7 @@ When you start the application, you'll see three options:
 - **Esc**: Go back to previous screen
 - **q**: Quit (from main menu) or return to main menu (from other screens)
 - **d**: Delete favourite (in favourites list)
+- **r**: Rename favourite (in favourites list)
 
 ## Project Structure
 

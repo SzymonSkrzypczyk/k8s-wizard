@@ -25,3 +25,8 @@ type favouriteSavedMsg struct {
 type favouriteDeletedMsg struct {
 	err error
 }
+
+// favouriteRenamedMsg is sent when a favourite has been renamed
+type favouriteRenamedMsg struct {
+	err error
+}

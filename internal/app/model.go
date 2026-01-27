@@ -28,6 +28,7 @@ type Model struct {
 	selectedAction       Action
 	selectedResourceName string
 	currentCommand       string
+	renamingFavouriteIdx int // Index of favourite being renamed
 
 	// UI components
 	list      list.Model
@@ -140,6 +141,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Refresh favourites list
 		return m.navigateToFavouritesList(), nil
+
+	case favouriteRenamedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		// Refresh favourites list
+		return m.navigateToFavouritesList(), nil
 	}
 
 	return m, nil
@@ -170,6 +178,13 @@ func (m Model) View() string {
 		s.WriteString("Save as Favourite\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
 		s.WriteString(fmt.Sprintf("Command: %s\n\n", m.currentCommand))
+		s.WriteString(m.textInput.View())
+		s.WriteString("\n\nPress Enter to save, Esc to cancel")
+
+	case RenameFavouriteScreen:
+		s.WriteString("Rename Favourite\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString("Enter new name:\n\n")
 		s.WriteString(m.textInput.View())
 		s.WriteString("\n\nPress Enter to save, Esc to cancel")
 
@@ -215,11 +230,20 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.deleteFavourite(idx)
 			}
 		}
+
+	case "r":
+		// Rename favourite if in favourites list
+		if m.currentScreen == FavouritesListScreen && m.favStore != nil {
+			idx := m.list.Index()
+			if idx >= 0 && idx < len(m.favStore.List()) {
+				return m.navigateToRenameFavourite(idx), nil
+			}
+		}
 	}
 
 	// Pass other keys to the active component
 	switch m.currentScreen {
-	case SaveFavouriteScreen:
+	case SaveFavouriteScreen, RenameFavouriteScreen:
 		m.textInput, cmd = m.textInput.Update(msg)
 	case CommandOutputScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
@@ -253,6 +277,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case SaveFavouriteScreen:
 		return m.handleSaveFavourite()
+
+	case RenameFavouriteScreen:
+		return m.handleRenameFavourite()
 	}
 
 	return m, nil
@@ -335,7 +362,7 @@ func (m Model) navigateToFavouritesList() Model {
 		}
 	}
 
-	m.list = ui.NewList(items, "Favourites (Enter to run, 'd' to delete)", m.width, m.height-4)
+	m.list = ui.NewList(items, "Favourites (Enter=run, 'd'=delete, 'r'=rename)", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = FavouritesListScreen
 	return m
@@ -346,6 +373,24 @@ func (m Model) navigateToSaveFavourite() Model {
 	m.textInput.Focus()
 	m.previousScreen = m.currentScreen
 	m.currentScreen = SaveFavouriteScreen
+	return m
+}
+
+func (m Model) navigateToRenameFavourite(idx int) Model {
+	if m.favStore == nil {
+		return m
+	}
+
+	fav, ok := m.favStore.Get(idx)
+	if !ok {
+		return m
+	}
+
+	m.renamingFavouriteIdx = idx
+	m.textInput.SetValue(fav.Name)
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = RenameFavouriteScreen
 	return m
 }
 
@@ -366,6 +411,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToMainMenu()
 	case SaveFavouriteScreen:
 		return m.navigateToCommandPreview()
+	case RenameFavouriteScreen:
+		return m.navigateToFavouritesList()
 	default:
 		return m.navigateToMainMenu()
 	}
@@ -504,6 +551,20 @@ func (m Model) handleSaveFavourite() (tea.Model, tea.Cmd) {
 	return m, m.saveFavourite(fav)
 }
 
+func (m Model) handleRenameFavourite() (tea.Model, tea.Cmd) {
+	newName := m.textInput.Value()
+	if newName == "" {
+		return m, nil
+	}
+
+	if m.favStore == nil {
+		m.err = fmt.Errorf("favourites store not available")
+		return m.navigateToMainMenu(), nil
+	}
+
+	return m, m.renameFavourite(m.renamingFavouriteIdx, newName)
+}
+
 // Command execution
 
 func (m Model) fetchPodNames() tea.Cmd {
@@ -547,5 +608,12 @@ func (m Model) deleteFavourite(idx int) tea.Cmd {
 	return func() tea.Msg {
 		err := m.favStore.Delete(idx)
 		return favouriteDeletedMsg{err: err}
+	}
+}
+
+func (m Model) renameFavourite(idx int, newName string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.favStore.Rename(idx, newName)
+		return favouriteRenamedMsg{err: err}
 	}
 }
