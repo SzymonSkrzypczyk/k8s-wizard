@@ -57,6 +57,53 @@ func (c *Client) ListPodNames() ([]string, error) {
 	return names, nil
 }
 
+// GetCurrentContext checks if a Kubernetes cluster context is configured
+func (c *Client) GetCurrentContext() (string, error) {
+	result, err := c.execute("config", "current-context")
+	if err != nil {
+		return "", fmt.Errorf("no cluster context configured: %w", err)
+	}
+	if result.Error != "" {
+		return "", fmt.Errorf("no cluster context configured: %s", result.Error)
+	}
+	
+	context := strings.TrimSpace(result.Output)
+	if context == "" {
+		return "", fmt.Errorf("no cluster context configured")
+	}
+	
+	return context, nil
+}
+
+// ExecuteRaw executes a raw kubectl command string with cluster validation
+func (c *Client) ExecuteRaw(commandStr string) (CommandResult, error) {
+	// First check if a cluster context is configured
+	if _, err := c.GetCurrentContext(); err != nil {
+		return CommandResult{
+			Command: commandStr,
+			Error:   err.Error(),
+		}, err
+	}
+
+	// Parse the command string to extract kubectl arguments
+	// Remove "kubectl " prefix if present
+	commandStr = strings.TrimSpace(commandStr)
+	if strings.HasPrefix(commandStr, "kubectl ") {
+		commandStr = strings.TrimPrefix(commandStr, "kubectl ")
+	}
+
+	// Split the command into arguments
+	args := strings.Fields(commandStr)
+	if len(args) == 0 {
+		return CommandResult{
+			Command: commandStr,
+			Error:   "invalid command",
+		}, fmt.Errorf("invalid command")
+	}
+
+	return c.execute(args...)
+}
+
 // execute runs a kubectl command and captures output
 func (c *Client) execute(args ...string) (CommandResult, error) {
 	cmd := exec.Command("kubectl", args...)

@@ -799,23 +799,8 @@ func (m Model) fetchPodNames() tea.Cmd {
 
 func (m Model) executeCommand() tea.Cmd {
 	return func() tea.Msg {
-		var result kubectl.CommandResult
-		var err error
-
-		// Execute based on current selections
-		switch m.selectedAction {
-		case ActionGet:
-			if m.selectedResource == ResourcePods {
-				result, err = m.kubectlClient.GetPods()
-			} else {
-				result, err = m.kubectlClient.GetDeployments()
-			}
-		case ActionDescribe:
-			result, err = m.kubectlClient.DescribePod(m.selectedResourceName)
-		case ActionLogs:
-			result, err = m.kubectlClient.GetPodLogs(m.selectedResourceName)
-		}
-
+		// Use the ExecuteRaw method which validates cluster context and runs the command
+		result, err := m.kubectlClient.ExecuteRaw(m.currentCommand)
 		return commandExecutedMsg{result: result, err: err}
 	}
 }
