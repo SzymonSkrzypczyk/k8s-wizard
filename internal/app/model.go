@@ -208,7 +208,12 @@ func (m Model) View() string {
 		s.WriteString(m.list.View())
 	}
 
-	s.WriteString("\n\nPress 'q' to quit")
+	// Add context-sensitive help text at the bottom
+	if m.currentScreen == MainMenuScreen {
+		s.WriteString("\n\nPress 'q' to quit")
+	} else {
+		s.WriteString("\n\nPress 'Esc' to go back | 'q' to quit")
+	}
 
 	return s.String()
 }
