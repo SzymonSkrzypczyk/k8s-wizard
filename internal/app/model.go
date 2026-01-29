@@ -2,7 +2,9 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -151,6 +153,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Refresh favourites list
 		return m.navigateToFavouritesList(), nil
+
+	case outputSavedMsg:
+		if msg.err != nil {
+			m.err = fmt.Errorf("Failed to save output: %v", msg.err)
+		} else {
+			m.err = nil
+			// Show success message - we'll display it in the view
+			m.viewport.SetContent(fmt.Sprintf("✓ Output saved to: %s\n\n%s", msg.filename, m.viewport.View()))
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -174,8 +186,9 @@ func (m Model) View() string {
 	case CommandOutputScreen:
 		s.WriteString("Command Output\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString(fmt.Sprintf("Command: %s\n\n", m.currentCommand))
 		s.WriteString(m.viewport.View())
-		s.WriteString("\n\nPress 'q' to return to main menu")
+		s.WriteString("\n\nPress 's' to save output | 'q' to return to main menu | ↑↓ to scroll")
 
 	case SaveFavouriteScreen:
 		s.WriteString("Save as Favourite\n")
@@ -250,6 +263,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if idx >= 0 && idx < len(m.favStore.List()) {
 				return m, m.deleteFavourite(idx)
 			}
+		}
+
+	case "s":
+		// Save output if in command output screen
+		if m.currentScreen == CommandOutputScreen {
+			return m, m.saveOutput()
 		}
 
 	case "r":
@@ -828,5 +847,24 @@ func (m Model) renameFavourite(idx int, newName string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.favStore.Rename(idx, newName)
 		return favouriteRenamedMsg{err: err}
+	}
+}
+
+func (m Model) saveOutput() tea.Cmd {
+	return func() tea.Msg {
+		// Get output content from viewport
+		content := m.viewport.View()
+
+		// Generate filename with timestamp
+		timestamp := time.Now().Format("20060102-150405")
+		filename := fmt.Sprintf("kubectl-output-%s.txt", timestamp)
+
+		// Write to file
+		err := os.WriteFile(filename, []byte(content), 0644)
+		if err != nil {
+			return outputSavedMsg{filename: "", err: err}
+		}
+
+		return outputSavedMsg{filename: filename, err: nil}
 	}
 }

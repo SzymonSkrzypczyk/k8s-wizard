@@ -1,0 +1,5 @@
+Error:                                                                                                   
+no cluster context configured: exec: "kubectl": executable file not found in %PATH%                      
+                                                                                                         
+Output:                                                                                                  
+                                                                                                         
