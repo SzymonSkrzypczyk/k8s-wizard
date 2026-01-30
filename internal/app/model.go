@@ -478,24 +478,26 @@ func (m Model) navigateToFlagsSelection() Model {
 	switch m.selectedAction {
 	case ActionGet:
 		items = []list.Item{
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
+			ui.NewSimpleItem("---", ""),
 			ui.NewSimpleItem("[ ] -o wide", "Show additional columns"),
 			ui.NewSimpleItem("[ ] -o yaml", "Output in YAML format"),
 			ui.NewSimpleItem("[ ] -o json", "Output in JSON format"),
 			ui.NewSimpleItem("[ ] --show-labels", "Show labels"),
 			ui.NewSimpleItem("[ ] -A", "All namespaces"),
 			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
-			ui.NewSimpleItem("---", ""),
-			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	case ActionDescribe:
 		items = []list.Item{
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
+			ui.NewSimpleItem("---", ""),
 			ui.NewSimpleItem("[ ] --show-events=true", "Show events"),
 			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
-			ui.NewSimpleItem("---", ""),
-			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	case ActionLogs:
 		items = []list.Item{
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
+			ui.NewSimpleItem("---", ""),
 			ui.NewSimpleItem("[ ] -f", "Follow log output"),
 			ui.NewSimpleItem("[ ] --tail=100", "Show last 100 lines"),
 			ui.NewSimpleItem("[ ] --tail=50", "Show last 50 lines"),
@@ -503,8 +505,6 @@ func (m Model) navigateToFlagsSelection() Model {
 			ui.NewSimpleItem("[ ] --since=5m", "Show logs from last 5 minutes"),
 			ui.NewSimpleItem("[ ] --previous", "Show logs from previous container"),
 			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
-			ui.NewSimpleItem("---", ""),
-			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
 		}
 	}
 
@@ -1001,7 +1001,7 @@ func (m Model) saveOutput(name string) tea.Cmd {
 	return func() tea.Msg {
 		content := m.currentOutputContent
 		dir := "saved_cmd"
-		
+
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			if err := os.Mkdir(dir, 0755); err != nil {
 				return outputSavedMsg{filename: "", err: err}
@@ -1027,7 +1027,7 @@ func (m Model) deleteSavedOutput(filename string) tea.Cmd {
 		if err != nil {
 			return savedOutputsLoadedMsg{files: nil, err: err}
 		}
-		
+
 		return m.loadSavedOutputsCmd()()
 	}
 }
@@ -1039,7 +1039,7 @@ func (m Model) viewSavedOutput(filename string) (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	
+
 	m = m.navigateToSavedOutputView(filename, string(content))
 	return m, nil
 }
