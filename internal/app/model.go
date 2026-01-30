@@ -125,6 +125,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		output := msg.result.Output
 		if msg.result.Error != "" {
 			output = "Error:\n" + msg.result.Error + "\n\nOutput:\n" + output
+		} else {
+			output = "Output:\n" + output
 		}
 
 		m.viewport.SetContent(output)
