@@ -26,6 +26,12 @@ const (
 	SaveFavouriteScreen
 	// RenameFavouriteScreen allows renaming an existing favourite
 	RenameFavouriteScreen
+	// SaveOutputNameScreen allows naming output before saving
+	SaveOutputNameScreen
+	// SavedOutputsListScreen shows list of saved outputs
+	SavedOutputsListScreen
+	// SavedOutputViewScreen shows a saved output
+	SavedOutputViewScreen
 )
 
 // ResourceType represents the type of Kubernetes resource

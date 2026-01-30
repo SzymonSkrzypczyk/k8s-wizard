@@ -32,4 +32,4 @@ Thumbs.db
 # Favourites file (user-specific)
 kube-wizard-favourites.json
 
-kubectl-output-*
+saved_cmd

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -33,7 +32,9 @@ type Model struct {
 	customNamespace      string   // Custom namespace value
 	needsNamespaceInput  bool     // Whether namespace input is needed
 	currentCommand       string
-	renamingFavouriteIdx int // Index of favourite being renamed
+	renamingFavouriteIdx int    // Index of favourite being renamed
+	currentOutputContent string // Current output content to be saved
+	selectedSavedOutput  string // Selected saved output filename
 
 	// UI components
 	list      list.Model
@@ -65,6 +66,7 @@ func NewModel() Model {
 	mainMenuItems := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
+		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 
@@ -159,11 +161,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case outputSavedMsg:
 		if msg.err != nil {
 			m.err = fmt.Errorf("Failed to save output: %v", msg.err)
-		} else {
-			m.err = nil
-			// Show success message - we'll display it in the view
-			m.viewport.SetContent(fmt.Sprintf("✓ Output saved to: %s\n\n%s", msg.filename, m.viewport.View()))
+			return m, nil
 		}
+		// Show success message and return to main menu
+		m.err = fmt.Errorf("✓ Output saved to: %s", msg.filename)
+		return m.navigateToMainMenu(), nil
+
+	case savedOutputsLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m.navigateToMainMenu(), nil
+		}
+
+		// Create list of saved outputs
+		items := ui.StringsToItems(msg.files)
+		if len(items) == 0 {
+			items = []list.Item{
+				ui.NewSimpleItem("No saved outputs", ""),
+			}
+		}
+		m.list = ui.NewList(items, "Saved Outputs (Enter=view, 'd'=delete)", m.width, m.height-4)
+		m.currentScreen = SavedOutputsListScreen
 		return m, nil
 	}
 
@@ -219,6 +237,22 @@ func (m Model) View() string {
 		s.WriteString(fmt.Sprintf("Command: %s\n\n", m.currentCommand))
 		s.WriteString(m.list.View())
 
+	case SavedOutputViewScreen:
+		s.WriteString("Saved Output: " + m.selectedSavedOutput + "\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString(m.viewport.View())
+		s.WriteString("\n\nPress 'q' or 'Esc' to go back | ↑↓ to scroll")
+
+	case SaveOutputNameScreen:
+		s.WriteString("Save Output\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString("Enter name for saved output (without extension):\n\n")
+		s.WriteString(m.textInput.View())
+		s.WriteString("\n\nPress Enter to save, Esc to cancel")
+
+	case SavedOutputsListScreen:
+		s.WriteString(m.list.View())
+
 	default:
 		s.WriteString(m.list.View())
 	}
@@ -266,11 +300,21 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.deleteFavourite(idx)
 			}
 		}
+		// Delete saved output if in saved outputs list
+		if m.currentScreen == SavedOutputsListScreen {
+			selected := m.list.SelectedItem()
+			if selected != nil {
+				filename := selected.(ui.SimpleItem).Title()
+				if filename != "No saved outputs" {
+					return m, m.deleteSavedOutput(filename)
+				}
+			}
+		}
 
 	case "s":
 		// Save output if in command output screen
 		if m.currentScreen == CommandOutputScreen {
-			return m, m.saveOutput()
+			return m.navigateToSaveOutputName(), nil
 		}
 
 	case "r":
@@ -285,9 +329,9 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Pass other keys to the active component
 	switch m.currentScreen {
-	case SaveFavouriteScreen, RenameFavouriteScreen, NamespaceInputScreen:
+	case SaveFavouriteScreen, RenameFavouriteScreen, NamespaceInputScreen, SaveOutputNameScreen:
 		m.textInput, cmd = m.textInput.Update(msg)
-	case CommandOutputScreen:
+	case CommandOutputScreen, SavedOutputViewScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	default:
 		m.list, cmd = ui.UpdateList(m.list, msg)
@@ -328,6 +372,12 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case NamespaceInputScreen:
 		return m.handleNamespaceInput()
+
+	case SavedOutputsListScreen:
+		return m.handleSavedOutputSelection()
+
+	case SaveOutputNameScreen:
+		return m.handleSaveOutputName()
 	}
 
 	return m, nil
@@ -523,6 +573,12 @@ func (m Model) navigateBack() Model {
 		return m.navigateToFavouritesList()
 	case NamespaceInputScreen:
 		return m.navigateToFlagsSelection()
+	case SavedOutputsListScreen:
+		return m.navigateToMainMenu()
+	case SavedOutputViewScreen:
+		return m.navigateToSavedOutputsList()
+	case SaveOutputNameScreen:
+		return m.navigateToCommandOutput()
 	default:
 		return m.navigateToMainMenu()
 	}
@@ -543,6 +599,8 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 		return m.navigateToResourceSelection(), nil
 	case "Favourites":
 		return m.navigateToFavouritesList(), nil
+	case "Saved Outputs":
+		return m.loadSavedOutputs()
 	case "Exit":
 		return m, tea.Quit
 	}
@@ -852,21 +910,136 @@ func (m Model) renameFavourite(idx int, newName string) tea.Cmd {
 	}
 }
 
-func (m Model) saveOutput() tea.Cmd {
+func (m Model) navigateToSaveOutputName() Model {
+	m.currentOutputContent = m.viewport.View()
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = "Enter name (e.g. pods-output)"
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SaveOutputNameScreen
+	return m
+}
+
+func (m Model) navigateToSavedOutputsList() Model {
+	m.list = ui.NewList([]list.Item{
+		ui.NewSimpleItem("Loading...", ""),
+	}, "Saved Outputs", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SavedOutputsListScreen
+	return m
+}
+
+func (m Model) navigateToSavedOutputView(filename string, content string) Model {
+	m.selectedSavedOutput = filename
+	m.viewport.SetContent(content)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SavedOutputViewScreen
+	return m
+}
+
+func (m Model) navigateToCommandOutput() Model {
+	m.currentScreen = CommandOutputScreen
+	return m
+}
+
+func (m Model) handleSaveOutputName() (tea.Model, tea.Cmd) {
+	name := m.textInput.Value()
+	if name == "" {
+		return m, nil
+	}
+
+	return m, m.saveOutput(name)
+}
+
+func (m Model) handleSavedOutputSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+	if title == "No saved outputs" || title == "Loading..." {
+		return m, nil
+	}
+
+	return m.viewSavedOutput(title)
+}
+
+func (m Model) loadSavedOutputs() (tea.Model, tea.Cmd) {
+	m = m.navigateToSavedOutputsList()
+	return m, m.loadSavedOutputsCmd()
+}
+
+func (m Model) loadSavedOutputsCmd() tea.Cmd {
 	return func() tea.Msg {
-		// Get output content from viewport
-		content := m.viewport.View()
+		dir := "saved_cmd"
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if err := os.Mkdir(dir, 0755); err != nil {
+				return savedOutputsLoadedMsg{files: nil, err: err}
+			}
+		}
 
-		// Generate filename with timestamp
-		timestamp := time.Now().Format("20060102-150405")
-		filename := fmt.Sprintf("kubectl-output-%s.txt", timestamp)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return savedOutputsLoadedMsg{files: nil, err: err}
+		}
 
-		// Write to file
-		err := os.WriteFile(filename, []byte(content), 0644)
+		var files []string
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txt") {
+				// Strip .txt suffix for display
+				name := strings.TrimSuffix(entry.Name(), ".txt")
+				files = append(files, name)
+			}
+		}
+
+		return savedOutputsLoadedMsg{files: files, err: nil}
+	}
+}
+
+func (m Model) saveOutput(name string) tea.Cmd {
+	return func() tea.Msg {
+		content := m.currentOutputContent
+		dir := "saved_cmd"
+		
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if err := os.Mkdir(dir, 0755); err != nil {
+				return outputSavedMsg{filename: "", err: err}
+			}
+		}
+
+		filename := fmt.Sprintf("%s.txt", name)
+		filepath := fmt.Sprintf("%s/%s", dir, filename)
+
+		err := os.WriteFile(filepath, []byte(content), 0644)
 		if err != nil {
 			return outputSavedMsg{filename: "", err: err}
 		}
 
 		return outputSavedMsg{filename: filename, err: nil}
 	}
+}
+
+func (m Model) deleteSavedOutput(filename string) tea.Cmd {
+	return func() tea.Msg {
+		filepath := fmt.Sprintf("saved_cmd/%s.txt", filename)
+		err := os.Remove(filepath)
+		if err != nil {
+			return savedOutputsLoadedMsg{files: nil, err: err}
+		}
+		
+		return m.loadSavedOutputsCmd()()
+	}
+}
+
+func (m Model) viewSavedOutput(filename string) (tea.Model, tea.Cmd) {
+	filePath := fmt.Sprintf("saved_cmd/%s.txt", filename)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		m.err = err
+		return m, nil
+	}
+	
+	m = m.navigateToSavedOutputView(filename, string(content))
+	return m, nil
 }

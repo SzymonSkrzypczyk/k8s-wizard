@@ -36,3 +36,9 @@ type outputSavedMsg struct {
 	filename string
 	err      error
 }
+
+// savedOutputsLoadedMsg is sent when saved output files have been loaded
+type savedOutputsLoadedMsg struct {
+	files []string
+	err   error
+}
