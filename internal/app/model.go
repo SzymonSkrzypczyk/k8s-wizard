@@ -1253,6 +1253,39 @@ func (m Model) removeSavedOutputsIndexForBase(baseName string) error {
 	return m.saveSavedOutputsIndex(index)
 }
 
+func (m Model) savedOutputGroupExists(baseName string) (bool, error) {
+	baseName = strings.TrimSpace(strings.TrimSuffix(baseName, ".txt"))
+	if baseName == "" {
+		return false, nil
+	}
+
+	dir := "saved_cmd"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), ".txt")
+		fileBase := name
+		if matches := versionRe.FindStringSubmatch(name); matches != nil {
+			fileBase = matches[1]
+		}
+		if fileBase == baseName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (m Model) getSavedOutputBaseNameForCommand(command string) (string, bool, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", false, nil
@@ -1268,6 +1301,15 @@ func (m Model) getSavedOutputBaseNameForCommand(command string) (string, bool, e
 	}
 	name = strings.TrimSpace(strings.TrimSuffix(name, ".txt"))
 	if name == "" {
+		return "", false, nil
+	}
+
+	exists, err := m.savedOutputGroupExists(name)
+	if err != nil {
+		return "", false, err
+	}
+	if !exists {
+		_ = m.removeSavedOutputsIndexForBase(name)
 		return "", false, nil
 	}
 	return name, true, nil
@@ -1558,6 +1600,23 @@ func (m Model) deleteSavedOutput(filename string) tea.Cmd {
 		err := os.Remove(filepath)
 		if err != nil {
 			return savedOutputsLoadedMsg{files: nil, err: err}
+		}
+
+		versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+		base := strings.TrimSpace(strings.TrimSuffix(filename, ".txt"))
+		if matches := versionRe.FindStringSubmatch(base); matches != nil {
+			if matches[1] != "" {
+				base = matches[1]
+			}
+		}
+		if base != "" {
+			exists, checkErr := m.savedOutputGroupExists(base)
+			if checkErr != nil {
+				return savedOutputsLoadedMsg{files: nil, err: checkErr}
+			}
+			if !exists {
+				_ = m.removeSavedOutputsIndexForBase(base)
+			}
 		}
 
 		return m.loadSavedOutputsCmd()()
