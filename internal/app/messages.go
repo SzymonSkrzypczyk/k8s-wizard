@@ -31,6 +31,10 @@ type favouriteRenamedMsg struct {
 	err error
 }
 
+type savedOutputRenamedMsg struct {
+	err error
+}
+
 // outputSavedMsg is sent when command output has been saved to a file
 type outputSavedMsg struct {
 	filename string

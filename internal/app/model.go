@@ -35,6 +35,7 @@ type Model struct {
 	renamingFavouriteIdx int    // Index of favourite being renamed
 	currentOutputContent string // Current output content to be saved
 	selectedSavedOutput  string // Selected saved output filename
+	renamingSavedOutput  string // Saved output being renamed
 
 	// UI components
 	list      list.Model
@@ -158,6 +159,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Refresh favourites list
 		return m.navigateToFavouritesList(), nil
 
+	case savedOutputRenamedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m.loadSavedOutputs()
+
 	case outputSavedMsg:
 		if msg.err != nil {
 			m.err = fmt.Errorf("Failed to save output: %v", msg.err)
@@ -180,7 +187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ui.NewSimpleItem("No saved outputs", ""),
 			}
 		}
-		m.list = ui.NewList(items, "Saved Outputs (Enter=view, 'd'=delete)", m.width, m.height-4)
+		m.list = ui.NewList(items, "Saved Outputs (Enter=view, 'd'=delete, 'r'=rename)", m.width, m.height-4)
 		m.currentScreen = SavedOutputsListScreen
 		return m, nil
 	}
@@ -221,6 +228,13 @@ func (m Model) View() string {
 		s.WriteString("Rename Favourite\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
 		s.WriteString("Enter new name:\n\n")
+		s.WriteString(m.textInput.View())
+		s.WriteString("\n\nPress Enter to save, Esc to cancel")
+
+	case RenameSavedOutputScreen:
+		s.WriteString("Rename Saved Output\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString("Enter new name (without extension):\n\n")
 		s.WriteString(m.textInput.View())
 		s.WriteString("\n\nPress Enter to save, Esc to cancel")
 
@@ -280,6 +294,9 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.navigateToMainMenu(), nil
 
 	case "esc":
+		if m.currentScreen == SavedOutputViewScreen || m.currentScreen == RenameSavedOutputScreen {
+			return m.loadSavedOutputs()
+		}
 		// Go back to previous screen
 		return m.navigateBack(), nil
 
@@ -325,11 +342,20 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m.navigateToRenameFavourite(idx), nil
 			}
 		}
+		if m.currentScreen == SavedOutputsListScreen {
+			selected := m.list.SelectedItem()
+			if selected != nil {
+				filename := selected.(ui.SimpleItem).Title()
+				if filename != "No saved outputs" && filename != "Loading..." {
+					return m.navigateToRenameSavedOutput(filename), nil
+				}
+			}
+		}
 	}
 
 	// Pass other keys to the active component
 	switch m.currentScreen {
-	case SaveFavouriteScreen, RenameFavouriteScreen, NamespaceInputScreen, SaveOutputNameScreen:
+	case SaveFavouriteScreen, RenameFavouriteScreen, RenameSavedOutputScreen, NamespaceInputScreen, SaveOutputNameScreen:
 		m.textInput, cmd = m.textInput.Update(msg)
 	case CommandOutputScreen, SavedOutputViewScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
@@ -369,6 +395,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case RenameFavouriteScreen:
 		return m.handleRenameFavourite()
+
+	case RenameSavedOutputScreen:
+		return m.handleRenameSavedOutput()
 
 	case NamespaceInputScreen:
 		return m.handleNamespaceInput()
@@ -551,6 +580,16 @@ func (m Model) navigateToRenameFavourite(idx int) Model {
 	return m
 }
 
+func (m Model) navigateToRenameSavedOutput(filename string) Model {
+	m.renamingSavedOutput = filename
+	m.textInput.SetValue(filename)
+	m.textInput.Placeholder = "Enter new name"
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = RenameSavedOutputScreen
+	return m
+}
+
 func (m Model) navigateBack() Model {
 	switch m.currentScreen {
 	case ResourceSelectionScreen:
@@ -577,6 +616,8 @@ func (m Model) navigateBack() Model {
 	case SavedOutputsListScreen:
 		return m.navigateToMainMenu()
 	case SavedOutputViewScreen:
+		return m.navigateToSavedOutputsList()
+	case RenameSavedOutputScreen:
 		return m.navigateToSavedOutputsList()
 	case SaveOutputNameScreen:
 		return m.navigateToCommandOutput()
@@ -854,6 +895,15 @@ func (m Model) handleRenameFavourite() (tea.Model, tea.Cmd) {
 	return m, m.renameFavourite(m.renamingFavouriteIdx, newName)
 }
 
+func (m Model) handleRenameSavedOutput() (tea.Model, tea.Cmd) {
+	newName := strings.TrimSpace(m.textInput.Value())
+	if newName == "" {
+		return m, nil
+	}
+	newName = strings.TrimSuffix(newName, ".txt")
+	return m, m.renameSavedOutput(m.renamingSavedOutput, newName)
+}
+
 func (m Model) handleNamespaceInput() (tea.Model, tea.Cmd) {
 	namespace := m.textInput.Value()
 	if namespace == "" {
@@ -908,6 +958,24 @@ func (m Model) renameFavourite(idx int, newName string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.favStore.Rename(idx, newName)
 		return favouriteRenamedMsg{err: err}
+	}
+}
+
+func (m Model) renameSavedOutput(oldName string, newName string) tea.Cmd {
+	return func() tea.Msg {
+		oldPath := fmt.Sprintf("saved_cmd/%s.txt", oldName)
+		newPath := fmt.Sprintf("saved_cmd/%s.txt", newName)
+
+		if oldName == newName {
+			return savedOutputRenamedMsg{err: nil}
+		}
+		if _, err := os.Stat(newPath); err == nil {
+			return savedOutputRenamedMsg{err: fmt.Errorf("saved output '%s' already exists", newName)}
+		}
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return savedOutputRenamedMsg{err: err}
+		}
+		return savedOutputRenamedMsg{err: nil}
 	}
 }
 

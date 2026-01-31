@@ -32,6 +32,7 @@ const (
 	SavedOutputsListScreen
 	// SavedOutputViewScreen shows a saved output
 	SavedOutputViewScreen
+	RenameSavedOutputScreen
 )
 
 // ResourceType represents the type of Kubernetes resource
