@@ -1,8 +1,11 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -331,6 +334,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "s":
 		// Save output if in command output screen
 		if m.currentScreen == CommandOutputScreen {
+			baseName, ok, err := m.getSavedOutputBaseNameForCommand(m.currentCommand)
+			if err != nil {
+				m.err = err
+				return m, nil
+			}
+			if ok {
+				m.currentOutputContent = m.viewport.View()
+				return m, m.saveOutput(baseName)
+			}
 			return m.navigateToSaveOutputName(), nil
 		}
 
@@ -975,8 +987,122 @@ func (m Model) renameSavedOutput(oldName string, newName string) tea.Cmd {
 		if err := os.Rename(oldPath, newPath); err != nil {
 			return savedOutputRenamedMsg{err: err}
 		}
+		if err := m.updateSavedOutputsIndexOnRename(oldName, newName); err != nil {
+			return savedOutputRenamedMsg{err: err}
+		}
 		return savedOutputRenamedMsg{err: nil}
 	}
+}
+
+func (m Model) loadSavedOutputsIndex() (map[string]string, error) {
+	indexPath := "saved_cmd/index.json"
+
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return map[string]string{}, nil
+	}
+
+	var index map[string]string
+	if err := json.Unmarshal(data, &index); err != nil {
+		return nil, err
+	}
+	if index == nil {
+		index = map[string]string{}
+	}
+	return index, nil
+}
+
+func (m Model) saveSavedOutputsIndex(index map[string]string) error {
+	data, err := json.Marshal(index)
+	if err != nil {
+		return err
+	}
+
+	if _, statErr := os.Stat("saved_cmd"); os.IsNotExist(statErr) {
+		if err := os.Mkdir("saved_cmd", 0755); err != nil {
+			return err
+		}
+	}
+
+	return os.WriteFile("saved_cmd/index.json", data, 0644)
+}
+
+func (m Model) getSavedOutputBaseNameForCommand(command string) (string, bool, error) {
+	if strings.TrimSpace(command) == "" {
+		return "", false, nil
+	}
+
+	index, err := m.loadSavedOutputsIndex()
+	if err != nil {
+		return "", false, err
+	}
+	name, ok := index[command]
+	if !ok {
+		return "", false, nil
+	}
+	name = strings.TrimSpace(strings.TrimSuffix(name, ".txt"))
+	if name == "" {
+		return "", false, nil
+	}
+	return name, true, nil
+}
+
+func (m Model) setSavedOutputBaseNameForCommand(command string, baseName string) error {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return nil
+	}
+
+	baseName = strings.TrimSpace(strings.TrimSuffix(baseName, ".txt"))
+	if baseName == "" {
+		return nil
+	}
+
+	index, err := m.loadSavedOutputsIndex()
+	if err != nil {
+		return err
+	}
+	index[command] = baseName
+	return m.saveSavedOutputsIndex(index)
+}
+
+func (m Model) updateSavedOutputsIndexOnRename(oldName string, newName string) error {
+	oldName = strings.TrimSpace(strings.TrimSuffix(oldName, ".txt"))
+	newName = strings.TrimSpace(strings.TrimSuffix(newName, ".txt"))
+	if oldName == "" || newName == "" {
+		return nil
+	}
+
+	versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+	if matches := versionRe.FindStringSubmatch(newName); matches != nil {
+		if matches[1] != "" {
+			newName = matches[1]
+		}
+	}
+
+	index, err := m.loadSavedOutputsIndex()
+	if err != nil {
+		return err
+	}
+
+	changed := false
+	for cmd, base := range index {
+		if base == oldName {
+			index[cmd] = newName
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return m.saveSavedOutputsIndex(index)
 }
 
 func (m Model) navigateToSaveOutputName() Model {
@@ -1077,11 +1203,65 @@ func (m Model) saveOutput(name string) tea.Cmd {
 			}
 		}
 
-		filename := fmt.Sprintf("%s.txt", name)
+		trimmedName := strings.TrimSpace(strings.TrimSuffix(name, ".txt"))
+		if trimmedName == "" {
+			return outputSavedMsg{filename: "", err: fmt.Errorf("output name cannot be empty")}
+		}
+
+		versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+		baseName := trimmedName
+		if matches := versionRe.FindStringSubmatch(trimmedName); matches != nil {
+			if matches[1] != "" {
+				baseName = matches[1]
+			}
+		}
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return outputSavedMsg{filename: "", err: err}
+		}
+
+		maxVersion := 0
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+				continue
+			}
+
+			existing := strings.TrimSuffix(entry.Name(), ".txt")
+			if existing == baseName {
+				if maxVersion < 1 {
+					maxVersion = 1
+				}
+				continue
+			}
+			if matches := versionRe.FindStringSubmatch(existing); matches != nil {
+				if matches[1] != baseName {
+					continue
+				}
+				v, convErr := strconv.Atoi(matches[2])
+				if convErr != nil {
+					continue
+				}
+				if v > maxVersion {
+					maxVersion = v
+				}
+			}
+		}
+
+		targetName := baseName
+		if maxVersion > 0 {
+			targetName = fmt.Sprintf("%s_v%d", baseName, maxVersion+1)
+		}
+
+		filename := fmt.Sprintf("%s.txt", targetName)
 		filepath := fmt.Sprintf("%s/%s", dir, filename)
 
-		err := os.WriteFile(filepath, []byte(content), 0644)
+		err = os.WriteFile(filepath, []byte(content), 0644)
 		if err != nil {
+			return outputSavedMsg{filename: "", err: err}
+		}
+
+		if err := m.setSavedOutputBaseNameForCommand(m.currentCommand, baseName); err != nil {
 			return outputSavedMsg{filename: "", err: err}
 		}
 
