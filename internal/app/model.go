@@ -389,6 +389,7 @@ func (m Model) navigateToMainMenu() Model {
 	items := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
+		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 	m.list = ui.NewList(items, "Kubernetes Wizard", m.width, m.height-4)
