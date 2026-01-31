@@ -387,7 +387,7 @@ func (m Model) View() string {
 		s.WriteString("Saved Output: " + m.selectedSavedOutput + "\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
 		s.WriteString(m.viewport.View())
-		s.WriteString("\n\nPress 'q' or 'Esc' to go back | ↑↓ to scroll")
+		s.WriteString("\n\nPress 'd' to delete | 'q' or 'Esc' to go back | ↑↓ to scroll")
 
 	case SaveOutputNameScreen:
 		s.WriteString("Save Output\n")
@@ -453,6 +453,24 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.favStore.List()) {
 				return m, m.deleteFavourite(idx)
+			}
+		}
+		// Delete currently viewed saved output version
+		if m.currentScreen == SavedOutputViewScreen {
+			if strings.TrimSpace(m.selectedSavedOutput) != "" {
+				base := m.selectedSavedOutputBase
+				if base == "" {
+					versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+					base = m.selectedSavedOutput
+					if matches := versionRe.FindStringSubmatch(base); matches != nil {
+						if matches[1] != "" {
+							base = matches[1]
+						}
+					}
+				}
+				m.savedOutputsReturnScreen = SavedOutputVersionsScreen
+				m.savedOutputsReturnBase = base
+				return m, m.deleteSavedOutput(m.selectedSavedOutput)
 			}
 		}
 		// Delete saved output group if in saved outputs list
