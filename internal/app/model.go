@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -28,17 +29,22 @@ type Model struct {
 	previousScreen Screen
 
 	// User selections throughout the wizard
-	selectedResource     ResourceType
-	selectedAction       Action
-	selectedResourceName string
-	selectedFlags        []string // Selected command flags
-	customNamespace      string   // Custom namespace value
-	needsNamespaceInput  bool     // Whether namespace input is needed
-	currentCommand       string
-	renamingFavouriteIdx int    // Index of favourite being renamed
-	currentOutputContent string // Current output content to be saved
-	selectedSavedOutput  string // Selected saved output filename
-	renamingSavedOutput  string // Saved output being renamed
+	selectedResource           ResourceType
+	selectedAction             Action
+	selectedResourceName       string
+	selectedFlags              []string // Selected command flags
+	customNamespace            string   // Custom namespace value
+	needsNamespaceInput        bool     // Whether namespace input is needed
+	currentCommand             string
+	renamingFavouriteIdx       int    // Index of favourite being renamed
+	currentOutputContent       string // Current output content to be saved
+	selectedSavedOutput        string // Selected saved output filename
+	renamingSavedOutput        string // Saved output being renamed
+	renamingSavedOutputIsGroup bool
+	selectedSavedOutputBase    string
+	savedOutputsByBase         map[string][]string
+	savedOutputsReturnScreen   Screen
+	savedOutputsReturnBase     string
 
 	// UI components
 	list      list.Model
@@ -89,6 +95,96 @@ func NewModel() Model {
 		textInput:     ti,
 		viewport:      ui.NewViewport(0, 0),
 		err:           err,
+	}
+}
+
+func (m Model) renameSavedOutputGroup(oldBase string, newBase string) tea.Cmd {
+	return func() tea.Msg {
+		oldBase = strings.TrimSpace(strings.TrimSuffix(oldBase, ".txt"))
+		newBase = strings.TrimSpace(strings.TrimSuffix(newBase, ".txt"))
+		if oldBase == "" || newBase == "" {
+			return savedOutputRenamedMsg{err: fmt.Errorf("invalid name")}
+		}
+		if oldBase == newBase {
+			return savedOutputRenamedMsg{err: nil}
+		}
+
+		dir := "saved_cmd"
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return savedOutputRenamedMsg{err: err}
+		}
+
+		versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+		var renames [][2]string
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+				continue
+			}
+			name := strings.TrimSuffix(entry.Name(), ".txt")
+			base := name
+			suffix := ""
+			if matches := versionRe.FindStringSubmatch(name); matches != nil {
+				base = matches[1]
+				suffix = "_v" + matches[2]
+			}
+			if base != oldBase {
+				continue
+			}
+			oldPath := fmt.Sprintf("%s/%s.txt", dir, name)
+			newPath := fmt.Sprintf("%s/%s%s.txt", dir, newBase, suffix)
+			renames = append(renames, [2]string{oldPath, newPath})
+		}
+		if len(renames) == 0 {
+			return savedOutputRenamedMsg{err: fmt.Errorf("saved output '%s' not found", oldBase)}
+		}
+
+		for _, rn := range renames {
+			if _, err := os.Stat(rn[1]); err == nil {
+				return savedOutputRenamedMsg{err: fmt.Errorf("saved output '%s' already exists", newBase)}
+			}
+		}
+
+		for _, rn := range renames {
+			if err := os.Rename(rn[0], rn[1]); err != nil {
+				return savedOutputRenamedMsg{err: err}
+			}
+		}
+		if err := m.updateSavedOutputsIndexOnRename(oldBase, newBase); err != nil {
+			return savedOutputRenamedMsg{err: err}
+		}
+		return savedOutputRenamedMsg{err: nil}
+	}
+}
+
+func (m Model) deleteSavedOutputGroup(base string) tea.Cmd {
+	return func() tea.Msg {
+		base = strings.TrimSpace(strings.TrimSuffix(base, ".txt"))
+		if base == "" {
+			return savedOutputsLoadedMsg{files: nil, err: fmt.Errorf("invalid name")}
+		}
+		dir := "saved_cmd"
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return savedOutputsLoadedMsg{files: nil, err: err}
+		}
+		versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".txt") {
+				continue
+			}
+			name := strings.TrimSuffix(entry.Name(), ".txt")
+			fileBase := name
+			if matches := versionRe.FindStringSubmatch(name); matches != nil {
+				fileBase = matches[1]
+			}
+			if fileBase != base {
+				continue
+			}
+			_ = os.Remove(fmt.Sprintf("%s/%s.txt", dir, name))
+		}
+		_ = m.removeSavedOutputsIndexForBase(base)
+		return m.loadSavedOutputsCmd()()
 	}
 }
 
@@ -183,16 +279,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.navigateToMainMenu(), nil
 		}
 
-		// Create list of saved outputs
-		items := ui.StringsToItems(msg.files)
-		if len(items) == 0 {
-			items = []list.Item{
-				ui.NewSimpleItem("No saved outputs", ""),
+		versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+		grouped := make(map[string][]string)
+		for _, f := range msg.files {
+			base := f
+			if matches := versionRe.FindStringSubmatch(f); matches != nil {
+				if matches[1] != "" {
+					base = matches[1]
+				}
+			}
+			grouped[base] = append(grouped[base], f)
+		}
+
+		for base, versions := range grouped {
+			sort.Slice(versions, func(i, j int) bool {
+				vi := 1
+				vj := 1
+				if matches := versionRe.FindStringSubmatch(versions[i]); matches != nil {
+					if v, err := strconv.Atoi(matches[2]); err == nil {
+						vi = v
+					}
+				}
+				if matches := versionRe.FindStringSubmatch(versions[j]); matches != nil {
+					if v, err := strconv.Atoi(matches[2]); err == nil {
+						vj = v
+					}
+				}
+				return vi < vj
+			})
+			grouped[base] = versions
+		}
+		m.savedOutputsByBase = grouped
+
+		if m.savedOutputsReturnScreen == SavedOutputVersionsScreen && m.savedOutputsReturnBase != "" {
+			base := m.savedOutputsReturnBase
+			m.savedOutputsReturnScreen = 0
+			m.savedOutputsReturnBase = ""
+			if _, ok := m.savedOutputsByBase[base]; ok {
+				return m.navigateToSavedOutputVersions(base), nil
 			}
 		}
-		m.list = ui.NewList(items, "Saved Outputs (Enter=view, 'd'=delete, 'r'=rename)", m.width, m.height-4)
-		m.currentScreen = SavedOutputsListScreen
-		return m, nil
+		m.savedOutputsReturnScreen = 0
+		m.savedOutputsReturnBase = ""
+		return m.navigateToSavedOutputsGroups(), nil
 	}
 
 	return m, nil
@@ -270,6 +399,9 @@ func (m Model) View() string {
 	case SavedOutputsListScreen:
 		s.WriteString(m.list.View())
 
+	case SavedOutputVersionsScreen:
+		s.WriteString(m.list.View())
+
 	default:
 		s.WriteString(m.list.View())
 	}
@@ -297,7 +429,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.navigateToMainMenu(), nil
 
 	case "esc":
-		if m.currentScreen == SavedOutputViewScreen || m.currentScreen == RenameSavedOutputScreen {
+		if m.currentScreen == RenameSavedOutputScreen {
+			if m.renamingSavedOutputIsGroup {
+				return m.loadSavedOutputsToVersions(m.renamingSavedOutput)
+			}
 			return m.loadSavedOutputs()
 		}
 		// Go back to previous screen
@@ -320,12 +455,23 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.deleteFavourite(idx)
 			}
 		}
-		// Delete saved output if in saved outputs list
+		// Delete saved output group if in saved outputs list
 		if m.currentScreen == SavedOutputsListScreen {
 			selected := m.list.SelectedItem()
 			if selected != nil {
+				base := selected.(ui.SimpleItem).Title()
+				if base != "No saved outputs" {
+					return m, m.deleteSavedOutputGroup(base)
+				}
+			}
+		}
+		if m.currentScreen == SavedOutputVersionsScreen {
+			selected := m.list.SelectedItem()
+			if selected != nil {
 				filename := selected.(ui.SimpleItem).Title()
-				if filename != "No saved outputs" {
+				if filename != "No versions" {
+					m.savedOutputsReturnScreen = SavedOutputVersionsScreen
+					m.savedOutputsReturnBase = m.selectedSavedOutputBase
 					return m, m.deleteSavedOutput(filename)
 				}
 			}
@@ -357,10 +503,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.currentScreen == SavedOutputsListScreen {
 			selected := m.list.SelectedItem()
 			if selected != nil {
-				filename := selected.(ui.SimpleItem).Title()
-				if filename != "No saved outputs" && filename != "Loading..." {
-					return m.navigateToRenameSavedOutput(filename), nil
+				base := selected.(ui.SimpleItem).Title()
+				if base != "No saved outputs" && base != "Loading..." {
+					return m.navigateToRenameSavedOutputGroup(base), nil
 				}
+			}
+		}
+		if m.currentScreen == SavedOutputVersionsScreen {
+			if m.selectedSavedOutputBase != "" {
+				return m.navigateToRenameSavedOutputGroup(m.selectedSavedOutputBase), nil
 			}
 		}
 	}
@@ -416,6 +567,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case SavedOutputsListScreen:
 		return m.handleSavedOutputSelection()
+
+	case SavedOutputVersionsScreen:
+		return m.handleSavedOutputVersionSelection()
 
 	case SaveOutputNameScreen:
 		return m.handleSaveOutputName()
@@ -594,7 +748,19 @@ func (m Model) navigateToRenameFavourite(idx int) Model {
 
 func (m Model) navigateToRenameSavedOutput(filename string) Model {
 	m.renamingSavedOutput = filename
+	m.renamingSavedOutputIsGroup = false
 	m.textInput.SetValue(filename)
+	m.textInput.Placeholder = "Enter new name"
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = RenameSavedOutputScreen
+	return m
+}
+
+func (m Model) navigateToRenameSavedOutputGroup(base string) Model {
+	m.renamingSavedOutput = base
+	m.renamingSavedOutputIsGroup = true
+	m.textInput.SetValue(base)
 	m.textInput.Placeholder = "Enter new name"
 	m.textInput.Focus()
 	m.previousScreen = m.currentScreen
@@ -627,10 +793,18 @@ func (m Model) navigateBack() Model {
 		return m.navigateToFlagsSelection()
 	case SavedOutputsListScreen:
 		return m.navigateToMainMenu()
+	case SavedOutputVersionsScreen:
+		return m.navigateToSavedOutputsGroups()
 	case SavedOutputViewScreen:
-		return m.navigateToSavedOutputsList()
+		if m.previousScreen == SavedOutputVersionsScreen && m.selectedSavedOutputBase != "" {
+			return m.navigateToSavedOutputVersions(m.selectedSavedOutputBase)
+		}
+		return m.navigateToSavedOutputsGroups()
 	case RenameSavedOutputScreen:
-		return m.navigateToSavedOutputsList()
+		if m.renamingSavedOutputIsGroup {
+			return m.navigateToSavedOutputVersions(m.renamingSavedOutput)
+		}
+		return m.navigateToSavedOutputsGroups()
 	case SaveOutputNameScreen:
 		return m.navigateToCommandOutput()
 	default:
@@ -913,6 +1087,11 @@ func (m Model) handleRenameSavedOutput() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	newName = strings.TrimSuffix(newName, ".txt")
+	if m.renamingSavedOutputIsGroup {
+		m.savedOutputsReturnScreen = SavedOutputVersionsScreen
+		m.savedOutputsReturnBase = newName
+		return m, m.renameSavedOutputGroup(m.renamingSavedOutput, newName)
+	}
 	return m, m.renameSavedOutput(m.renamingSavedOutput, newName)
 }
 
@@ -1034,6 +1213,28 @@ func (m Model) saveSavedOutputsIndex(index map[string]string) error {
 	return os.WriteFile("saved_cmd/index.json", data, 0644)
 }
 
+func (m Model) removeSavedOutputsIndexForBase(baseName string) error {
+	baseName = strings.TrimSpace(strings.TrimSuffix(baseName, ".txt"))
+	if baseName == "" {
+		return nil
+	}
+	index, err := m.loadSavedOutputsIndex()
+	if err != nil {
+		return err
+	}
+	changed := false
+	for cmd, base := range index {
+		if base == baseName {
+			delete(index, cmd)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return m.saveSavedOutputsIndex(index)
+}
+
 func (m Model) getSavedOutputBaseNameForCommand(command string) (string, bool, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", false, nil
@@ -1124,6 +1325,50 @@ func (m Model) navigateToSavedOutputsList() Model {
 	return m
 }
 
+func (m Model) navigateToSavedOutputsGroups() Model {
+	items := []list.Item{}
+	if len(m.savedOutputsByBase) == 0 {
+		items = []list.Item{ui.NewSimpleItem("No saved outputs", "")}
+	} else {
+		bases := make([]string, 0, len(m.savedOutputsByBase))
+		for base := range m.savedOutputsByBase {
+			bases = append(bases, base)
+		}
+		sort.Strings(bases)
+		for _, base := range bases {
+			items = append(items, ui.NewSimpleItem(base, fmt.Sprintf("%d versions", len(m.savedOutputsByBase[base]))))
+		}
+	}
+	m.list = ui.NewList(items, "Saved Outputs (Enter=versions, 'd'=delete, 'r'=rename)", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SavedOutputsListScreen
+	return m
+}
+
+func (m Model) navigateToSavedOutputVersions(base string) Model {
+	m.selectedSavedOutputBase = base
+	versions := m.savedOutputsByBase[base]
+	items := []list.Item{}
+	if len(versions) == 0 {
+		items = []list.Item{ui.NewSimpleItem("No versions", "")}
+	} else {
+		versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+		for _, v := range versions {
+			n := 1
+			if matches := versionRe.FindStringSubmatch(v); matches != nil {
+				if parsed, err := strconv.Atoi(matches[2]); err == nil {
+					n = parsed
+				}
+			}
+			items = append(items, ui.NewSimpleItem(v, fmt.Sprintf("v%d", n)))
+		}
+	}
+	m.list = ui.NewList(items, fmt.Sprintf("Saved Outputs: %s (Enter=view, 'd'=delete)", base), m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SavedOutputVersionsScreen
+	return m
+}
+
 func (m Model) navigateToSavedOutputView(filename string, content string) Model {
 	m.selectedSavedOutput = filename
 	m.viewport.SetContent(content)
@@ -1156,11 +1401,31 @@ func (m Model) handleSavedOutputSelection() (tea.Model, tea.Cmd) {
 	if title == "No saved outputs" || title == "Loading..." {
 		return m, nil
 	}
+	return m.navigateToSavedOutputVersions(title), nil
+}
 
-	return m.viewSavedOutput(title)
+func (m Model) handleSavedOutputVersionSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	filename := selected.(ui.SimpleItem).Title()
+	if filename == "No versions" {
+		return m, nil
+	}
+
+	return m.viewSavedOutput(filename)
 }
 
 func (m Model) loadSavedOutputs() (tea.Model, tea.Cmd) {
+	m = m.navigateToSavedOutputsList()
+	return m, m.loadSavedOutputsCmd()
+}
+
+func (m Model) loadSavedOutputsToVersions(base string) (tea.Model, tea.Cmd) {
+	m.savedOutputsReturnScreen = SavedOutputVersionsScreen
+	m.savedOutputsReturnBase = base
 	m = m.navigateToSavedOutputsList()
 	return m, m.loadSavedOutputsCmd()
 }

@@ -30,6 +30,7 @@ const (
 	SaveOutputNameScreen
 	// SavedOutputsListScreen shows list of saved outputs
 	SavedOutputsListScreen
+	SavedOutputVersionsScreen
 	// SavedOutputViewScreen shows a saved output
 	SavedOutputViewScreen
 	RenameSavedOutputScreen
