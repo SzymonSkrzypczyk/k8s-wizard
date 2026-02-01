@@ -29,22 +29,24 @@ type Model struct {
 	previousScreen Screen
 
 	// User selections throughout the wizard
-	selectedResource           ResourceType
-	selectedAction             Action
-	selectedResourceName       string
-	selectedFlags              []string // Selected command flags
-	customNamespace            string   // Custom namespace value
-	needsNamespaceInput        bool     // Whether namespace input is needed
-	currentCommand             string
-	renamingFavouriteIdx       int    // Index of favourite being renamed
-	currentOutputContent       string // Current output content to be saved
-	selectedSavedOutput        string // Selected saved output filename
-	renamingSavedOutput        string // Saved output being renamed
-	renamingSavedOutputIsGroup bool
-	selectedSavedOutputBase    string
-	savedOutputsByBase         map[string][]string
-	savedOutputsReturnScreen   Screen
-	savedOutputsReturnBase     string
+	selectedResource              ResourceType
+	selectedAction                Action
+	selectedResourceName          string
+	selectedFlags                 []string // Selected command flags
+	customNamespace               string   // Custom namespace value
+	needsNamespaceInput           bool     // Whether namespace input is needed
+	currentCommand                string
+	renamingFavouriteIdx          int    // Index of favourite being renamed
+	currentOutputContent          string // Current output content to be saved
+	selectedSavedOutput           string // Selected saved output filename
+	renamingSavedOutput           string // Saved output being renamed
+	renamingSavedOutputIsGroup    bool
+	selectedSavedOutputBase       string
+	selectedSavedOutputVersionIdx int
+	savedOutputsByBase            map[string][]string
+	savedOutputsReturnScreen      Screen
+	savedOutputsReturnBase        string
+	savedOutputsReturnVersionIdx  int
 
 	// UI components
 	list      list.Model
@@ -313,14 +315,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.savedOutputsReturnScreen == SavedOutputVersionsScreen && m.savedOutputsReturnBase != "" {
 			base := m.savedOutputsReturnBase
+			idx := m.savedOutputsReturnVersionIdx
 			m.savedOutputsReturnScreen = 0
 			m.savedOutputsReturnBase = ""
+			m.savedOutputsReturnVersionIdx = 0
 			if _, ok := m.savedOutputsByBase[base]; ok {
+				m.selectedSavedOutputVersionIdx = idx
 				return m.navigateToSavedOutputVersions(base), nil
 			}
 		}
 		m.savedOutputsReturnScreen = 0
 		m.savedOutputsReturnBase = ""
+		m.savedOutputsReturnVersionIdx = 0
 		return m.navigateToSavedOutputsGroups(), nil
 	}
 
@@ -400,7 +406,7 @@ func (m Model) View() string {
 		s.WriteString(m.list.View())
 
 	case SavedOutputVersionsScreen:
-		s.WriteString(m.list.View())
+		s.WriteString(m.renderSavedOutputVersionsTable())
 
 	default:
 		s.WriteString(m.list.View())
@@ -447,6 +453,34 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.toggleFlag(), nil
 		}
 
+	case "left":
+		if m.currentScreen == SavedOutputVersionsScreen {
+			versions := m.savedOutputsByBase[m.selectedSavedOutputBase]
+			if len(versions) == 0 {
+				return m, nil
+			}
+			if m.selectedSavedOutputVersionIdx <= 0 {
+				m.selectedSavedOutputVersionIdx = len(versions) - 1
+			} else {
+				m.selectedSavedOutputVersionIdx--
+			}
+			return m, nil
+		}
+
+	case "right":
+		if m.currentScreen == SavedOutputVersionsScreen {
+			versions := m.savedOutputsByBase[m.selectedSavedOutputBase]
+			if len(versions) == 0 {
+				return m, nil
+			}
+			if m.selectedSavedOutputVersionIdx >= len(versions)-1 {
+				m.selectedSavedOutputVersionIdx = 0
+			} else {
+				m.selectedSavedOutputVersionIdx++
+			}
+			return m, nil
+		}
+
 	case "d":
 		// Delete favourite if in favourites list
 		if m.currentScreen == FavouritesListScreen && m.favStore != nil {
@@ -484,15 +518,22 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.currentScreen == SavedOutputVersionsScreen {
-			selected := m.list.SelectedItem()
-			if selected != nil {
-				filename := selected.(ui.SimpleItem).Title()
-				if filename != "No versions" {
-					m.savedOutputsReturnScreen = SavedOutputVersionsScreen
-					m.savedOutputsReturnBase = m.selectedSavedOutputBase
-					return m, m.deleteSavedOutput(filename)
-				}
+			versions := m.savedOutputsByBase[m.selectedSavedOutputBase]
+			if len(versions) == 0 {
+				return m, nil
 			}
+			idx := m.selectedSavedOutputVersionIdx
+			if idx < 0 {
+				idx = 0
+			}
+			if idx >= len(versions) {
+				idx = len(versions) - 1
+			}
+			filename := versions[idx]
+			m.savedOutputsReturnScreen = SavedOutputVersionsScreen
+			m.savedOutputsReturnBase = m.selectedSavedOutputBase
+			m.savedOutputsReturnVersionIdx = idx
+			return m, m.deleteSavedOutput(filename)
 		}
 
 	case "s":
@@ -540,6 +581,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 	case CommandOutputScreen, SavedOutputViewScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
+	case SavedOutputVersionsScreen:
+		cmd = nil
 	default:
 		m.list, cmd = ui.UpdateList(m.list, msg)
 	}
@@ -1408,6 +1451,16 @@ func (m Model) navigateToSavedOutputsGroups() Model {
 func (m Model) navigateToSavedOutputVersions(base string) Model {
 	m.selectedSavedOutputBase = base
 	versions := m.savedOutputsByBase[base]
+	if m.selectedSavedOutputVersionIdx < 0 {
+		m.selectedSavedOutputVersionIdx = 0
+	}
+	if len(versions) > 0 {
+		if m.selectedSavedOutputVersionIdx >= len(versions) {
+			m.selectedSavedOutputVersionIdx = len(versions) - 1
+		}
+	} else {
+		m.selectedSavedOutputVersionIdx = 0
+	}
 	items := []list.Item{}
 	if len(versions) == 0 {
 		items = []list.Item{ui.NewSimpleItem("No versions", "")}
@@ -1465,17 +1518,66 @@ func (m Model) handleSavedOutputSelection() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSavedOutputVersionSelection() (tea.Model, tea.Cmd) {
-	selected := m.list.SelectedItem()
-	if selected == nil {
+	versions := m.savedOutputsByBase[m.selectedSavedOutputBase]
+	if len(versions) == 0 {
 		return m, nil
 	}
+	idx := m.selectedSavedOutputVersionIdx
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(versions) {
+		idx = len(versions) - 1
+	}
+	return m.viewSavedOutput(versions[idx])
+}
 
-	filename := selected.(ui.SimpleItem).Title()
-	if filename == "No versions" {
-		return m, nil
+func (m Model) renderSavedOutputVersionsTable() string {
+	versions := m.savedOutputsByBase[m.selectedSavedOutputBase]
+	if len(versions) == 0 {
+		return "No versions"
 	}
 
-	return m.viewSavedOutput(filename)
+	idx := m.selectedSavedOutputVersionIdx
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(versions) {
+		idx = len(versions) - 1
+	}
+
+	versionRe := regexp.MustCompile(`^(.*)_v(\d+)$`)
+	labels := make([]string, 0, len(versions))
+	for _, v := range versions {
+		n := 1
+		if matches := versionRe.FindStringSubmatch(v); matches != nil {
+			if parsed, err := strconv.Atoi(matches[2]); err == nil {
+				n = parsed
+			}
+		}
+		labels = append(labels, fmt.Sprintf("v%d", n))
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Saved Outputs: %s\n", m.selectedSavedOutputBase))
+	sb.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	for i, lbl := range labels {
+		cell := lbl
+		if i == idx {
+			cell = "[" + cell + "]"
+		}
+		if i > 0 {
+			sb.WriteString("  ")
+		}
+		sb.WriteString(cell)
+	}
+
+	sb.WriteString("\n\n")
+	sb.WriteString("←→ select | Enter view | d delete | r rename | Esc back")
+	sb.WriteString("\n")
+	sb.WriteString("Selected: " + versions[idx])
+	return sb.String()
 }
 
 func (m Model) loadSavedOutputs() (tea.Model, tea.Cmd) {
