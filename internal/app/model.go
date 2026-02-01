@@ -61,6 +61,20 @@ type Model struct {
 	err error
 }
 
+func (m Model) loadCommandHelp() tea.Cmd {
+	return func() tea.Msg {
+		helpCmd := strings.TrimSpace(m.currentCommand)
+		if helpCmd == "" {
+			helpCmd = "kubectl"
+		}
+		if !strings.HasSuffix(helpCmd, " --help") {
+			helpCmd = helpCmd + " --help"
+		}
+		result, err := m.kubectlClient.ExecuteRaw(helpCmd)
+		return commandHelpLoadedMsg{result: result, err: err}
+	}
+}
+
 // NewModel creates and initializes a new application model
 func NewModel() Model {
 	// Initialize kubectl client
@@ -239,6 +253,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentScreen = CommandOutputScreen
 		return m, nil
 
+	case commandHelpLoadedMsg:
+		output := msg.result.Output
+		if msg.result.Error != "" {
+			output = "Error:\n" + msg.result.Error + "\n\nHelp Output:\n" + output
+		} else {
+			output = "Help Output:\n" + output
+		}
+		m.viewport.SetContent(output)
+		m.currentScreen = CommandHelpScreen
+		return m, nil
+
 	case favouriteSavedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -354,6 +379,13 @@ func (m Model) View() string {
 		s.WriteString(fmt.Sprintf("Command: %s\n\n", m.currentCommand))
 		s.WriteString(m.viewport.View())
 		s.WriteString("\n\nPress 's' to save output | 'q' to return to main menu | ↑↓ to scroll")
+
+	case CommandHelpScreen:
+		s.WriteString("Command Help\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString(fmt.Sprintf("Command: %s --help\n\n", m.currentCommand))
+		s.WriteString(m.viewport.View())
+		s.WriteString("\n\nPress 'Esc' to go back | ↑↓ to scroll")
 
 	case SaveFavouriteScreen:
 		s.WriteString("Save as Favourite\n")
@@ -581,6 +613,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 	case CommandOutputScreen, SavedOutputViewScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
+	case CommandHelpScreen:
+		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	case SavedOutputVersionsScreen:
 		cmd = nil
 	default:
@@ -690,6 +724,7 @@ func (m Model) navigateToActionSelection() Model {
 func (m Model) navigateToCommandPreview() Model {
 	items := []list.Item{
 		ui.NewSimpleItem("Execute", "Run the command"),
+		ui.NewSimpleItem("Help", "Show --help output"),
 		ui.NewSimpleItem("Save as Favourite", "Save for later use"),
 		ui.NewSimpleItem("Back", "Return to previous screen"),
 	}
@@ -844,6 +879,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToResourceSelection()
 	case CommandPreviewScreen:
 		return m.navigateToFlagsSelection()
+	case CommandHelpScreen:
+		return m.navigateToCommandPreview()
 	case FavouritesListScreen:
 		return m.navigateToMainMenu()
 	case SaveFavouriteScreen:
@@ -1087,6 +1124,8 @@ func (m Model) handleCommandPreviewSelection() (tea.Model, tea.Cmd) {
 	switch title {
 	case "Execute":
 		return m, m.executeCommand()
+	case "Help":
+		return m, m.loadCommandHelp()
 	case "Save as Favourite":
 		return m.navigateToSaveFavourite(), nil
 	case "Back":

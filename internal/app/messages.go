@@ -16,6 +16,11 @@ type commandExecutedMsg struct {
 	err    error
 }
 
+type commandHelpLoadedMsg struct {
+	result kubectl.CommandResult
+	err    error
+}
+
 // favouriteSavedMsg is sent when a favourite has been saved
 type favouriteSavedMsg struct {
 	err error

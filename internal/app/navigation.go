@@ -20,6 +20,7 @@ const (
 	CommandPreviewScreen
 	// CommandOutputScreen shows the command output
 	CommandOutputScreen
+	CommandHelpScreen
 	// FavouritesListScreen shows saved favourites
 	FavouritesListScreen
 	// SaveFavouriteScreen allows naming a favourite
