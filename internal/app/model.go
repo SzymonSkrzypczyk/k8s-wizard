@@ -992,7 +992,7 @@ func (m Model) navigateToFavouritesList() Model {
 		}
 	}
 
-	m.list = ui.NewList(items, "Favourites (Enter=run, 'd'=delete, 'r'=rename)", m.width, m.height-4)
+	m.list = ui.NewList(items, "Favourites (Enter=run, 'd'=delete, 'r'=rename, 'h'=bind hotkey)", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = FavouritesListScreen
 	return m
