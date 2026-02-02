@@ -99,6 +99,13 @@ func (m Model) loadCommandHelp() tea.Cmd {
 	}
 }
 
+func (m Model) checkClusterConnectivity() tea.Cmd {
+	return func() tea.Msg {
+		result, err := m.kubectlClient.ExecuteRaw("kubectl cluster-info")
+		return clusterConnectivityCheckedMsg{result: result, err: err}
+	}
+}
+
 // NewModel creates and initializes a new application model
 func NewModel() Model {
 	// Initialize kubectl client
@@ -127,6 +134,7 @@ func NewModel() Model {
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
+		ui.NewSimpleItem("Check Cluster Connectivity", "Verify connection to Kubernetes cluster"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 
@@ -299,6 +307,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentScreen = CommandHelpScreen
 		return m, nil
 
+	case clusterConnectivityCheckedMsg:
+		output := msg.result.Output
+		if msg.result.Error != "" {
+			output = "Error:\n" + msg.result.Error + "\n\nCluster Connectivity:\n" + output
+		} else {
+			output = "Cluster Connectivity:\n" + output
+		}
+		m.viewport.SetContent(output)
+		m.currentScreen = ClusterConnectivityScreen
+		return m, nil
+
 	case favouriteSavedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -432,6 +451,12 @@ func (m Model) View() string {
 
 	case HotkeysListScreen:
 		s.WriteString(m.list.View())
+
+	case ClusterConnectivityScreen:
+		s.WriteString("Cluster Connectivity\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString(m.viewport.View())
+		s.WriteString("\n\nPress 'Esc' to go back | ↑↓ to scroll")
 
 	case SaveFavouriteScreen:
 		s.WriteString("Save as Favourite\n")
@@ -717,6 +742,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	case CommandHelpScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
+	case ClusterConnectivityScreen:
+		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	case SavedOutputVersionsScreen:
 		cmd = nil
 	case HotkeyBindScreen:
@@ -785,6 +812,7 @@ func (m Model) navigateToMainMenu() Model {
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
+		ui.NewSimpleItem("Check Cluster Connectivity", "Verify connection to Kubernetes cluster"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 	m.list = ui.NewList(items, "Kubernetes Wizard", m.width, m.height-4)
@@ -1013,6 +1041,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToFlagsSelection()
 	case CommandHelpScreen:
 		return m.navigateToCommandPreview()
+	case ClusterConnectivityScreen:
+		return m.navigateToMainMenu()
 	case HotkeysListScreen:
 		return m.navigateToMainMenu()
 	case HotkeyBindScreen:
@@ -1066,6 +1096,8 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 		return m.loadSavedOutputs()
 	case "Hotkeys":
 		return m.navigateToHotkeysList(), nil
+	case "Check Cluster Connectivity":
+		return m, m.checkClusterConnectivity()
 	case "Exit":
 		return m, tea.Quit
 	}

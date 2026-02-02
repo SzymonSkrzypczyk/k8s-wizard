@@ -23,6 +23,7 @@ const (
 	CommandHelpScreen
 	HotkeysListScreen
 	HotkeyBindScreen
+	ClusterConnectivityScreen
 	// FavouritesListScreen shows saved favourites
 	FavouritesListScreen
 	// SaveFavouriteScreen allows naming a favourite
