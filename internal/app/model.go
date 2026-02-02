@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k8s-wizard/internal/favourites"
+	"github.com/k8s-wizard/internal/hotkeys"
 	"github.com/k8s-wizard/internal/kubectl"
 	"github.com/k8s-wizard/internal/ui"
 )
@@ -23,6 +24,7 @@ type Model struct {
 	// Core dependencies
 	kubectlClient *kubectl.Client
 	favStore      *favourites.Store
+	hotkeyStore   *hotkeys.Store
 
 	// Current screen and navigation state
 	currentScreen  Screen
@@ -48,6 +50,9 @@ type Model struct {
 	savedOutputsReturnBase        string
 	savedOutputsReturnVersionIdx  int
 
+	hotkeyBindingPending   bool
+	hotkeyBindingFavourite favourites.Favourite
+
 	// UI components
 	list      list.Model
 	viewport  viewport.Model
@@ -59,6 +64,25 @@ type Model struct {
 
 	// Error state
 	err error
+}
+
+func (m Model) isTextInputScreen() bool {
+	switch m.currentScreen {
+	case SaveFavouriteScreen, RenameFavouriteScreen, RenameSavedOutputScreen, NamespaceInputScreen, SaveOutputNameScreen:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m Model) tryParseHotkey(key string) (string, bool) {
+	key = strings.TrimSpace(strings.ToUpper(key))
+	switch key {
+	case "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12":
+		return key, true
+	default:
+		return "", false
+	}
 }
 
 func (m Model) loadCommandHelp() tea.Cmd {
@@ -88,11 +112,21 @@ func NewModel() Model {
 		favStore = nil
 	}
 
+	// Initialize hotkey store
+	hotkeyStore, hotkeyErr := hotkeys.NewStore()
+	if hotkeyErr != nil {
+		hotkeyStore = nil
+		if err == nil {
+			err = hotkeyErr
+		}
+	}
+
 	// Create initial list for main menu
 	mainMenuItems := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
+		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 
@@ -106,6 +140,7 @@ func NewModel() Model {
 	return Model{
 		kubectlClient: kubectlClient,
 		favStore:      favStore,
+		hotkeyStore:   hotkeyStore,
 		currentScreen: MainMenuScreen,
 		list:          initialList,
 		textInput:     ti,
@@ -387,6 +422,17 @@ func (m Model) View() string {
 		s.WriteString(m.viewport.View())
 		s.WriteString("\n\nPress 'Esc' to go back | ↑↓ to scroll")
 
+	case HotkeyBindScreen:
+		s.WriteString("Bind Hotkey\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString("Press F1-F12 to bind the selected favourite\n\n")
+		s.WriteString(fmt.Sprintf("Favourite: %s\n", m.hotkeyBindingFavourite.Name))
+		s.WriteString(fmt.Sprintf("Command: %s\n\n", m.hotkeyBindingFavourite.Command))
+		s.WriteString("Press Esc to cancel")
+
+	case HotkeysListScreen:
+		s.WriteString(m.list.View())
+
 	case SaveFavouriteScreen:
 		s.WriteString("Save as Favourite\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
@@ -458,6 +504,29 @@ func (m Model) View() string {
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// Global hotkeys (F1-F12) – ignore while typing into a text input screen
+	if m.hotkeyStore != nil && !m.isTextInputScreen() {
+		if hk, ok := m.tryParseHotkey(msg.String()); ok {
+			// If we're currently binding a hotkey, bind instead of executing
+			if m.hotkeyBindingPending {
+				binding := hotkeys.Binding{Key: hk, Name: m.hotkeyBindingFavourite.Name, Command: m.hotkeyBindingFavourite.Command}
+				if err := m.hotkeyStore.Set(binding); err != nil {
+					m.err = err
+					m.hotkeyBindingPending = false
+					return m.navigateToFavouritesList(), nil
+				}
+				m.err = fmt.Errorf("✓ Bound %s to %s", hk, m.hotkeyBindingFavourite.Name)
+				m.hotkeyBindingPending = false
+				return m.navigateToFavouritesList(), nil
+			}
+
+			if binding, ok := m.hotkeyStore.Get(hk); ok {
+				m.currentCommand = binding.Command
+				return m, m.executeCommand()
+			}
+		}
+	}
+
 	switch msg.String() {
 	case "ctrl+c", "q":
 		if m.currentScreen == MainMenuScreen {
@@ -467,6 +536,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.navigateToMainMenu(), nil
 
 	case "esc":
+		if m.currentScreen == HotkeyBindScreen {
+			m.hotkeyBindingPending = false
+			return m.navigateToFavouritesList(), nil
+		}
 		if m.currentScreen == RenameSavedOutputScreen {
 			if m.renamingSavedOutputIsGroup {
 				return m.loadSavedOutputsToVersions(m.renamingSavedOutput)
@@ -519,6 +592,21 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.favStore.List()) {
 				return m, m.deleteFavourite(idx)
+			}
+		}
+		// Delete hotkey binding if in hotkeys list
+		if m.currentScreen == HotkeysListScreen && m.hotkeyStore != nil {
+			selected := m.list.SelectedItem()
+			if selected != nil {
+				key := selected.(ui.SimpleItem).Title()
+				if strings.HasPrefix(strings.ToUpper(key), "F") {
+					if err := m.hotkeyStore.Delete(key); err != nil {
+						m.err = err
+						return m, nil
+					}
+					m.err = fmt.Errorf("✓ Unbound %s", strings.ToUpper(key))
+					return m.navigateToHotkeysList(), nil
+				}
 			}
 		}
 		// Delete currently viewed saved output version
@@ -605,6 +693,20 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m.navigateToRenameSavedOutputGroup(m.selectedSavedOutputBase), nil
 			}
 		}
+
+	case "h":
+		// Start hotkey bind flow from favourites list
+		if m.currentScreen == FavouritesListScreen && m.favStore != nil && m.hotkeyStore != nil {
+			idx := m.list.Index()
+			fav, ok := m.favStore.Get(idx)
+			if ok {
+				m.hotkeyBindingFavourite = fav
+				m.hotkeyBindingPending = true
+				m.previousScreen = m.currentScreen
+				m.currentScreen = HotkeyBindScreen
+				return m, nil
+			}
+		}
 	}
 
 	// Pass other keys to the active component
@@ -616,6 +718,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case CommandHelpScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	case SavedOutputVersionsScreen:
+		cmd = nil
+	case HotkeyBindScreen:
 		cmd = nil
 	default:
 		m.list, cmd = ui.UpdateList(m.list, msg)
@@ -680,12 +784,40 @@ func (m Model) navigateToMainMenu() Model {
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
+		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 	m.list = ui.NewList(items, "Kubernetes Wizard", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = MainMenuScreen
 	m.err = nil
+	return m
+}
+
+func (m Model) navigateToHotkeysList() Model {
+	items := []list.Item{}
+	if m.hotkeyStore == nil {
+		items = []list.Item{ui.NewSimpleItem("Hotkeys unavailable", "")}
+		m.list = ui.NewList(items, "Hotkeys", m.width, m.height-4)
+		m.previousScreen = m.currentScreen
+		m.currentScreen = HotkeysListScreen
+		return m
+	}
+
+	keys := []string{"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"}
+	for _, k := range keys {
+		if b, ok := m.hotkeyStore.Get(k); ok {
+			items = append(items, ui.NewSimpleItem(k, b.Name))
+		} else {
+			items = append(items, ui.NewSimpleItem(k, "(unbound)"))
+		}
+	}
+	if len(items) == 0 {
+		items = []list.Item{ui.NewSimpleItem("No hotkeys bound", "")}
+	}
+	m.list = ui.NewList(items, "Hotkeys ('d'=unbind, Esc=back)", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = HotkeysListScreen
 	return m
 }
 
@@ -881,6 +1013,11 @@ func (m Model) navigateBack() Model {
 		return m.navigateToFlagsSelection()
 	case CommandHelpScreen:
 		return m.navigateToCommandPreview()
+	case HotkeysListScreen:
+		return m.navigateToMainMenu()
+	case HotkeyBindScreen:
+		m.hotkeyBindingPending = false
+		return m.navigateToFavouritesList()
 	case FavouritesListScreen:
 		return m.navigateToMainMenu()
 	case SaveFavouriteScreen:
@@ -927,6 +1064,8 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 		return m.navigateToFavouritesList(), nil
 	case "Saved Outputs":
 		return m.loadSavedOutputs()
+	case "Hotkeys":
+		return m.navigateToHotkeysList(), nil
 	case "Exit":
 		return m, tea.Quit
 	}

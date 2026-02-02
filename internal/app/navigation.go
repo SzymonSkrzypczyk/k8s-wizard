@@ -21,6 +21,8 @@ const (
 	// CommandOutputScreen shows the command output
 	CommandOutputScreen
 	CommandHelpScreen
+	HotkeysListScreen
+	HotkeyBindScreen
 	// FavouritesListScreen shows saved favourites
 	FavouritesListScreen
 	// SaveFavouriteScreen allows naming a favourite
