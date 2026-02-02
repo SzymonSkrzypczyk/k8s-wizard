@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k8s-wizard/internal/favourites"
+	"github.com/k8s-wizard/internal/history"
 	"github.com/k8s-wizard/internal/hotkeys"
 	"github.com/k8s-wizard/internal/kubectl"
 	"github.com/k8s-wizard/internal/ui"
@@ -25,6 +26,7 @@ type Model struct {
 	kubectlClient *kubectl.Client
 	favStore      *favourites.Store
 	hotkeyStore   *hotkeys.Store
+	historyStore  *history.Store
 
 	// Current screen and navigation state
 	currentScreen  Screen
@@ -128,10 +130,20 @@ func NewModel() Model {
 		}
 	}
 
+	// Initialize history store
+	historyStore, historyErr := history.NewStore()
+	if historyErr != nil {
+		historyStore = nil
+		if err == nil {
+			err = historyErr
+		}
+	}
+
 	// Create initial list for main menu
 	mainMenuItems := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
+		ui.NewSimpleItem("Command History", "View and re-run previous commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
 		ui.NewSimpleItem("Check Cluster Connectivity", "Verify connection to Kubernetes cluster"),
@@ -149,6 +161,7 @@ func NewModel() Model {
 		kubectlClient: kubectlClient,
 		favStore:      favStore,
 		hotkeyStore:   hotkeyStore,
+		historyStore:  historyStore,
 		currentScreen: MainMenuScreen,
 		list:          initialList,
 		textInput:     ti,
@@ -471,6 +484,9 @@ func (m Model) View() string {
 		s.WriteString(m.viewport.View())
 		s.WriteString("\n\nPress 'Esc' to go back | ↑↓ to scroll")
 
+	case CommandHistoryScreen:
+		s.WriteString(m.list.View())
+
 	case SaveFavouriteScreen:
 		s.WriteString("Save as Favourite\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
@@ -708,6 +724,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m.navigateToSaveOutputName(), nil
 		}
+		// Save favourite from history list
+		if m.currentScreen == CommandHistoryScreen && m.historyStore != nil && m.favStore != nil {
+			idx := m.list.Index()
+			entry, ok := m.historyStore.Get(idx)
+			if ok {
+				m.currentCommand = entry.Command
+				return m.navigateToSaveFavourite(), nil
+			}
+		}
 
 	case "r":
 		// Rename favourite if in favourites list
@@ -812,8 +837,24 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case SaveOutputNameScreen:
 		return m.handleSaveOutputName()
+
+	case CommandHistoryScreen:
+		return m.handleCommandHistorySelection()
 	}
 
+	return m, nil
+}
+
+func (m Model) handleCommandHistorySelection() (tea.Model, tea.Cmd) {
+	if m.historyStore == nil {
+		return m, nil
+	}
+	idx := m.list.Index()
+	entry, ok := m.historyStore.Get(idx)
+	if ok {
+		m.currentCommand = entry.Command
+		return m, m.executeCommand()
+	}
 	return m, nil
 }
 
@@ -823,6 +864,7 @@ func (m Model) navigateToMainMenu() Model {
 	items := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
+		ui.NewSimpleItem("Command History", "View and re-run previous commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
 		ui.NewSimpleItem("Check Cluster Connectivity", "Verify connection to Kubernetes cluster"),
@@ -859,6 +901,31 @@ func (m Model) navigateToHotkeysList() Model {
 	m.list = ui.NewList(items, "Hotkeys ('d'=unbind, Esc=back)", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = HotkeysListScreen
+	return m
+}
+
+func (m Model) navigateToCommandHistory() Model {
+	items := []list.Item{}
+	if m.historyStore == nil {
+		items = []list.Item{ui.NewSimpleItem("History unavailable", "")}
+		m.list = ui.NewList(items, "Command History", m.width, m.height-4)
+		m.previousScreen = m.currentScreen
+		m.currentScreen = CommandHistoryScreen
+		return m
+	}
+
+	entries := m.historyStore.List()
+	if len(entries) == 0 {
+		items = []list.Item{ui.NewSimpleItem("No command history", "")}
+	} else {
+		for _, entry := range entries {
+			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05")
+			items = append(items, ui.NewSimpleItem(entry.Command, timestamp))
+		}
+	}
+	m.list = ui.NewList(items, "Command History (Enter=run, 's'=save as favourite, Esc=back)", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = CommandHistoryScreen
 	return m
 }
 
@@ -1056,6 +1123,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToCommandPreview()
 	case ClusterConnectivityScreen:
 		return m.navigateToMainMenu()
+	case CommandHistoryScreen:
+		return m.navigateToMainMenu()
 	case HotkeysListScreen:
 		return m.navigateToMainMenu()
 	case HotkeyBindScreen:
@@ -1105,6 +1174,8 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 		return m.navigateToResourceSelection(), nil
 	case "Favourites":
 		return m.navigateToFavouritesList(), nil
+	case "Command History":
+		return m.navigateToCommandHistory(), nil
 	case "Saved Outputs":
 		return m.loadSavedOutputs()
 	case "Hotkeys":
@@ -1409,6 +1480,10 @@ func (m Model) fetchPodNames() tea.Cmd {
 
 func (m Model) executeCommand() tea.Cmd {
 	return func() tea.Msg {
+		// Add to history
+		if m.historyStore != nil && strings.TrimSpace(m.currentCommand) != "" {
+			_ = m.historyStore.Add(m.currentCommand)
+		}
 		// Use the ExecuteRaw method which validates cluster context and runs the command
 		result, err := m.kubectlClient.ExecuteRaw(m.currentCommand)
 		return commandExecutedMsg{result: result, err: err}
