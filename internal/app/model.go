@@ -312,7 +312,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.result.Error != "" {
 			output = "Error:\n" + msg.result.Error + "\n\nCluster Connectivity:\n" + output
 		} else {
-			output = "Cluster Connectivity:\n" + output
+			if strings.Contains(output, "Unable to connect to the server") {
+				output = "Cluster Connectivity:\n\n❌ Cannot connect to the Kubernetes cluster.\n\n" + output
+			} else {
+				// Show a concise connected status and include basic info
+				lines := strings.Split(output, "\n")
+				var summary []string
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line != "" && !strings.HasPrefix(line, "Further debugging") && !strings.HasPrefix(line, "To further debug") {
+						summary = append(summary, line)
+					}
+				}
+				output = "Cluster Connectivity:\n\n✅ Connected to the Kubernetes cluster.\n\n" + strings.Join(summary, "\n")
+			}
 		}
 		m.viewport.SetContent(output)
 		m.currentScreen = ClusterConnectivityScreen
