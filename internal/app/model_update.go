@@ -200,6 +200,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.savedOutputsReturnBase = ""
 		m.savedOutputsReturnVersionIdx = 0
 		return m.navigateToSavedOutputsGroups(), nil
+
+	case secretKeysLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		return m.navigateToSecretFieldSelection(msg.keys), nil
 	}
 
 	return m, nil
@@ -502,6 +509,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case CustomCommandScreen:
 		return m.handleCustomCommandInput()
+
+	case SecretFieldSelectionScreen:
+		return m.handleSecretFieldSelection()
 	}
 
 	return m, nil

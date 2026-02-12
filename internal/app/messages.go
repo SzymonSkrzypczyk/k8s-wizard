@@ -62,3 +62,9 @@ type savedOutputsLoadedMsg struct {
 	files []string
 	err   error
 }
+
+// secretKeysLoadedMsg is sent when secret keys have been fetched for selection
+type secretKeysLoadedMsg struct {
+	keys []string
+	err  error
+}

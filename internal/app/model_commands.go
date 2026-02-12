@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -64,6 +65,39 @@ func (m Model) fetchResourceNames() tea.Cmd {
 		}
 
 		return resourceNamesLoadedMsg{names: names, err: err}
+	}
+}
+
+func (m Model) fetchSecretKeys() tea.Cmd {
+	return func() tea.Msg {
+		// Get the secret as JSON to extract keys
+		cmd := fmt.Sprintf("kubectl get secret %s -o json", m.selectedResourceName)
+		if m.customNamespace != "" {
+			cmd += " -n " + m.customNamespace
+		} else if m.defaultNamespace != "" && !m.hasExplicitNamespaceFlag() {
+			cmd += " -n " + m.defaultNamespace
+		}
+
+		result, err := m.kubectlClient.ExecuteRaw(cmd)
+		if err != nil {
+			return secretKeysLoadedMsg{err: err}
+		}
+		if result.Error != "" {
+			return secretKeysLoadedMsg{err: fmt.Errorf(result.Error)}
+		}
+
+		var secretData struct {
+			Data map[string]interface{} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(result.Output), &secretData); err != nil {
+			return secretKeysLoadedMsg{err: fmt.Errorf("failed to parse secret JSON: %v", err)}
+		}
+
+		keys := make([]string, 0, len(secretData.Data))
+		for k := range secretData.Data {
+			keys = append(keys, k)
+		}
+		return secretKeysLoadedMsg{keys: keys}
 	}
 }
 

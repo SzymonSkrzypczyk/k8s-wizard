@@ -136,6 +136,7 @@ func (m Model) navigateToActionSelection() Model {
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all secrets"),
 			ui.NewSimpleItem("Describe", "Describe a specific secret (may reveal sensitive data)"),
+			ui.NewSimpleItem("Extract Field", "Pick a field to decode and view"),
 		}
 	case ResourceIngress:
 		items = []list.Item{
@@ -224,6 +225,22 @@ func (m Model) navigateToNamespaceInput() Model {
 	return m
 }
 
+func (m Model) navigateToSecretFieldSelection(keys []string) Model {
+	items := []list.Item{
+		ui.NewSimpleItem("Custom JSONPath", "Enter a custom JSONPath (e.g. .metadata.labels)"),
+		ui.NewSimpleItem("---", ""),
+	}
+
+	for _, k := range keys {
+		items = append(items, ui.NewSimpleItem(k, "Extract and decode this data field"))
+	}
+
+	m.list = ui.NewList(items, "Select Field to Extract", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SecretFieldSelectionScreen
+	return m
+}
+
 func (m Model) navigateToSaveFavourite() Model {
 	m.textInput.SetValue("")
 	m.textInput.Placeholder = "Enter favourite name"
@@ -281,6 +298,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToCommandPreview()
 	case RenameFavouriteScreen:
 		return m.navigateToFavouritesList()
+	case SecretFieldSelectionScreen:
+		return m.navigateToActionSelection()
 	case NamespaceInputScreen:
 		return m.navigateToFlagsSelection()
 	case SavedOutputsListScreen:

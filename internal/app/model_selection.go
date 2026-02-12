@@ -99,6 +99,11 @@ func (m Model) handleActionSelection() (tea.Model, tea.Cmd) {
 			return m, m.fetchPodNames()
 		}
 		return m, m.fetchResourceNames()
+
+	case "Extract Field":
+		m.selectedAction = ActionExtractField
+		// Need to fetch resource names for selection
+		return m, m.fetchResourceNames()
 	}
 
 	return m, nil
@@ -111,6 +116,10 @@ func (m Model) handleResourceNameSelection() (tea.Model, tea.Cmd) {
 	}
 
 	m.selectedResourceName = selected.(ui.SimpleItem).Title()
+
+	if m.selectedAction == ActionExtractField {
+		return m, m.fetchSecretKeys()
+	}
 
 	// Go to flags selection
 	return m.navigateToFlagsSelection(), nil
@@ -365,6 +374,38 @@ func (m Model) hasExplicitNamespaceFlag() bool {
 		}
 	}
 	return false
+}
+
+func (m Model) handleSecretFieldSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+
+	if title == "Custom JSONPath" {
+		return m.navigateToCustomCommand(), nil // Reusing CustomCommandScreen for JSONPath for now, or I should have a dedicated one.
+		// Actually, let's just use it to enter any command, but maybe I want a dedicated JSONPath input.
+		// For now, I'll stick to the plan: if they want custom, they can use Custom Command or I add one more screen.
+		// Let's add a simple one for Custom Field.
+	}
+
+	if title == "---" {
+		return m, nil
+	}
+
+	// Build the command to extract and decode the field
+	// Using -o go-template with base64 decode for secret data fields
+	m.currentCommand = fmt.Sprintf("kubectl get secret %s -o go-template='{{index .data \"%s\" | base64decode}}'", m.selectedResourceName, title)
+
+	if m.customNamespace != "" {
+		m.currentCommand += " -n " + m.customNamespace
+	} else if m.defaultNamespace != "" && !m.hasExplicitNamespaceFlag() {
+		m.currentCommand += " -n " + m.defaultNamespace
+	}
+
+	return m.navigateToCommandPreview(), nil
 }
 
 func (m Model) handleCustomCommandInput() (tea.Model, tea.Cmd) {

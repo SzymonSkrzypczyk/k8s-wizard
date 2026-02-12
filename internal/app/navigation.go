@@ -47,6 +47,8 @@ const (
 	NamespacesListScreen
 	// CustomCommandScreen lets users build an arbitrary kubectl command
 	CustomCommandScreen
+	// SecretFieldSelectionScreen allows selecting a field from a secret
+	SecretFieldSelectionScreen
 )
 
 // ResourceType represents the type of Kubernetes resource
@@ -69,6 +71,7 @@ const (
 	ActionGet Action = iota
 	ActionDescribe
 	ActionLogs
+	ActionExtractField
 )
 
 // String returns the string representation of a ResourceType
@@ -102,6 +105,8 @@ func (a Action) String() string {
 		return "Describe"
 	case ActionLogs:
 		return "Logs"
+	case ActionExtractField:
+		return "Extract Field"
 	default:
 		return "Unknown"
 	}
@@ -158,6 +163,11 @@ func buildCommand(resource ResourceType, action Action, resourceName string, fla
 			cmd += "logs deployment/" + resourceName
 		default:
 			cmd += "logs " + resourceName
+		}
+	case ActionExtractField:
+		// This is partially handled in handleSecretFieldSelection, but for consistency:
+		if resource == ResourceSecrets {
+			cmd += "get secret " + resourceName + " -o go-template='{{range $k, $v := .data}}{{$k}}: {{$v | base64decode}}{\"\\n\"}{{end}}'"
 		}
 	}
 
