@@ -3,12 +3,72 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k8s-wizard/internal/app"
 )
 
+const version = "0.1.0"
+
+func printUsage() {
+	fmt.Println("kube-wizard - interactive kubectl command wizard")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  kube-wizard [--version] [--config PATH]")
+	fmt.Println()
+	fmt.Println("Flags:")
+	fmt.Println("  -h, --help       Show this help message and exit")
+	fmt.Println("      --version    Print the version and exit")
+	fmt.Println("      --config     Path to optional configuration file (not yet used)")
+}
+
 func main() {
+	// Minimal hand-rolled flag parsing to keep behaviour explicit and avoid
+	// starting the TUI when the user only wants help or version information.
+	args := os.Args[1:]
+	showHelp := false
+	showVersion := false
+	configPath := ""
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "-h" || arg == "--help":
+			showHelp = true
+		case arg == "--version":
+			showVersion = true
+		case arg == "--config":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "Error: --config flag requires a path argument")
+				fmt.Fprintln(os.Stderr)
+				printUsage()
+				os.Exit(2)
+			}
+			configPath = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--config="):
+			configPath = strings.TrimPrefix(arg, "--config=")
+		default:
+			fmt.Fprintf(os.Stderr, "Error: unknown flag or argument %q\n\n", arg)
+			printUsage()
+			os.Exit(2)
+		}
+	}
+
+	if showHelp {
+		printUsage()
+		return
+	}
+
+	if showVersion {
+		fmt.Printf("kube-wizard version %s\n", version)
+		return
+	}
+
+	// For now, the config path is parsed but not yet wired into the app.
+	_ = configPath
+
 	// Initialize the Bubble Tea program with our app model
 	p := tea.NewProgram(
 		app.NewModel(),
