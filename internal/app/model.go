@@ -871,6 +871,16 @@ func (m Model) navigateToMainMenu() Model {
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
 	m.list = ui.NewList(items, "Kubernetes Wizard", m.width, m.height-4)
+
+	// Reset wizard selections when returning to the main menu to avoid stale state
+	m.selectedResource = 0
+	m.selectedAction = 0
+	m.selectedResourceName = ""
+	m.selectedFlags = nil
+	m.customNamespace = ""
+	m.needsNamespaceInput = false
+	m.currentCommand = ""
+
 	m.previousScreen = m.currentScreen
 	m.currentScreen = MainMenuScreen
 	m.err = nil
@@ -907,7 +917,9 @@ func (m Model) navigateToHotkeysList() Model {
 func (m Model) navigateToCommandHistory() Model {
 	items := []list.Item{}
 	if m.historyStore == nil {
-		items = []list.Item{ui.NewSimpleItem("History unavailable", "")}
+		items = []list.Item{
+			ui.NewSimpleItem("History unavailable", "Command history could not be loaded"),
+		}
 		m.list = ui.NewList(items, "Command History", m.width, m.height-4)
 		m.previousScreen = m.currentScreen
 		m.currentScreen = CommandHistoryScreen
@@ -916,7 +928,9 @@ func (m Model) navigateToCommandHistory() Model {
 
 	entries := m.historyStore.List()
 	if len(entries) == 0 {
-		items = []list.Item{ui.NewSimpleItem("No command history", "")}
+		items = []list.Item{
+			ui.NewSimpleItem("No command history", "Run some commands to see them here"),
+		}
 	} else {
 		for _, entry := range entries {
 			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05")
@@ -930,6 +944,15 @@ func (m Model) navigateToCommandHistory() Model {
 }
 
 func (m Model) navigateToResourceSelection() Model {
+	// Starting a new command flow: reset selections from any previous run
+	m.selectedResource = 0
+	m.selectedAction = 0
+	m.selectedResourceName = ""
+	m.selectedFlags = nil
+	m.customNamespace = ""
+	m.needsNamespaceInput = false
+	m.currentCommand = ""
+
 	items := []list.Item{
 		ui.NewSimpleItem("Pods", "Manage pods"),
 		ui.NewSimpleItem("Deployments", "Manage deployments"),
@@ -988,7 +1011,7 @@ func (m Model) navigateToFavouritesList() Model {
 
 	if len(items) == 0 {
 		items = []list.Item{
-			ui.NewSimpleItem("No favourites saved", ""),
+			ui.NewSimpleItem("No favourites saved", "Save a command from the preview screen or history to see it here"),
 		}
 	}
 
@@ -1113,10 +1136,8 @@ func (m Model) navigateBack() Model {
 	case ResourceNameSelectionScreen:
 		return m.navigateToActionSelection()
 	case FlagsSelectionScreen:
-		if m.selectedAction == ActionGet {
-			return m.navigateToActionSelection()
-		}
-		return m.navigateToResourceSelection()
+		// Always return to the action selection from flags to keep navigation consistent
+		return m.navigateToActionSelection()
 	case CommandPreviewScreen:
 		return m.navigateToFlagsSelection()
 	case CommandHelpScreen:
@@ -1729,7 +1750,9 @@ func (m Model) navigateToSavedOutputsList() Model {
 func (m Model) navigateToSavedOutputsGroups() Model {
 	items := []list.Item{}
 	if len(m.savedOutputsByBase) == 0 {
-		items = []list.Item{ui.NewSimpleItem("No saved outputs", "")}
+		items = []list.Item{
+			ui.NewSimpleItem("No saved outputs", "Save command output from the Command Output screen to see it here"),
+		}
 	} else {
 		bases := make([]string, 0, len(m.savedOutputsByBase))
 		for base := range m.savedOutputsByBase {
