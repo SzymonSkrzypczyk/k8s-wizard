@@ -866,6 +866,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case NamespacesListScreen:
 		return m.handleNamespaceSelection()
+
+	case CustomCommandScreen:
+		return m.handleCustomCommandVerbSelection()
 	}
 
 	return m, nil
@@ -889,6 +892,7 @@ func (m Model) handleCommandHistorySelection() (tea.Model, tea.Cmd) {
 func (m Model) navigateToMainMenu() Model {
 	items := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
+		ui.NewSimpleItem("Custom Command", "Build an advanced kubectl command"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
 		ui.NewSimpleItem("Command History", "View and re-run previous commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
@@ -1042,6 +1046,21 @@ func (m Model) navigateToCommandHistory() Model {
 	m.list = ui.NewList(items, "Command History (Enter=run, 's'=save as favourite, Esc=back)", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = CommandHistoryScreen
+	return m
+}
+
+func (m Model) navigateToCustomCommand() Model {
+	items := []list.Item{
+		ui.NewSimpleItem("get", "kubectl get <resource> [name] [flags]"),
+		ui.NewSimpleItem("describe", "kubectl describe <resource> [name] [flags]"),
+		ui.NewSimpleItem("logs", "kubectl logs <resource or pod> [flags]"),
+		ui.NewSimpleItem("apply", "kubectl apply -f <file> [flags]"),
+		ui.NewSimpleItem("delete", "kubectl delete <resource> [name] [flags]"),
+	}
+	m.list = ui.NewList(items, "Custom Command: choose verb", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = CustomCommandScreen
+	m.currentCommand = ""
 	return m
 }
 
@@ -1338,6 +1357,8 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 	switch title {
 	case "Run Command":
 		return m.navigateToResourceSelection(), nil
+	case "Custom Command":
+		return m.navigateToCustomCommand(), nil
 	case "Favourites":
 		return m.navigateToFavouritesList(), nil
 	case "Command History":
@@ -2080,6 +2101,27 @@ func (m Model) navigateToSavedOutputView(filename string, content string) Model 
 func (m Model) navigateToCommandOutput() Model {
 	m.currentScreen = CommandOutputScreen
 	return m
+}
+
+func (m Model) handleCustomCommandVerbSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	verb := selected.(ui.SimpleItem).Title()
+
+	// Reuse the text input to capture the rest of the command after the verb.
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = fmt.Sprintf("%s <resource> [name] [flags]", verb)
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = SaveFavouriteScreen
+
+	// Build a provisional command prefix so the preview and help flows work
+	m.currentCommand = "kubectl " + verb
+
+	return m, nil
 }
 
 func (m Model) handleSaveOutputName() (tea.Model, tea.Cmd) {

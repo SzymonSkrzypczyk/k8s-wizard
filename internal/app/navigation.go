@@ -45,6 +45,8 @@ const (
 	ContextsListScreen
 	// NamespacesListScreen shows available namespaces for default selection
 	NamespacesListScreen
+	// CustomCommandScreen lets users build an arbitrary kubectl command
+	CustomCommandScreen
 )
 
 // ResourceType represents the type of Kubernetes resource
