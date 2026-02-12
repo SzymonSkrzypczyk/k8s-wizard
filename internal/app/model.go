@@ -545,6 +545,13 @@ func (m Model) View() string {
 		s.WriteString(m.viewport.View())
 		s.WriteString("\n\nPress 'd' to delete | 'q' or 'Esc' to go back | ↑↓ to scroll")
 
+	case CustomCommandScreen:
+		s.WriteString("Custom Command\n")
+		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString("Enter kubectl arguments (without the leading 'kubectl') or a full kubectl command:\n\n")
+		s.WriteString(m.textInput.View())
+		s.WriteString("\n\nPress Enter to preview, Esc to cancel")
+
 	case SaveOutputNameScreen:
 		s.WriteString("Save Output\n")
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
@@ -868,7 +875,7 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		return m.handleNamespaceSelection()
 
 	case CustomCommandScreen:
-		return m.handleCustomCommandVerbSelection()
+		return m.handleCustomCommandInput()
 	}
 
 	return m, nil
@@ -1050,14 +1057,10 @@ func (m Model) navigateToCommandHistory() Model {
 }
 
 func (m Model) navigateToCustomCommand() Model {
-	items := []list.Item{
-		ui.NewSimpleItem("get", "kubectl get <resource> [name] [flags]"),
-		ui.NewSimpleItem("describe", "kubectl describe <resource> [name] [flags]"),
-		ui.NewSimpleItem("logs", "kubectl logs <resource or pod> [flags]"),
-		ui.NewSimpleItem("apply", "kubectl apply -f <file> [flags]"),
-		ui.NewSimpleItem("delete", "kubectl delete <resource> [name] [flags]"),
-	}
-	m.list = ui.NewList(items, "Custom Command: choose verb", m.width, m.height-4)
+	// Reuse the text input to capture a free-form kubectl command.
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = "e.g. get pods -n default"
+	m.textInput.Focus()
 	m.previousScreen = m.currentScreen
 	m.currentScreen = CustomCommandScreen
 	m.currentCommand = ""
@@ -2103,25 +2106,20 @@ func (m Model) navigateToCommandOutput() Model {
 	return m
 }
 
-func (m Model) handleCustomCommandVerbSelection() (tea.Model, tea.Cmd) {
-	selected := m.list.SelectedItem()
-	if selected == nil {
+func (m Model) handleCustomCommandInput() (tea.Model, tea.Cmd) {
+	input := strings.TrimSpace(m.textInput.Value())
+	if input == "" {
 		return m, nil
 	}
 
-	verb := selected.(ui.SimpleItem).Title()
+	// Allow users to type either full "kubectl ..." or just the arguments.
+	if strings.HasPrefix(input, "kubectl ") {
+		m.currentCommand = input
+	} else {
+		m.currentCommand = "kubectl " + input
+	}
 
-	// Reuse the text input to capture the rest of the command after the verb.
-	m.textInput.SetValue("")
-	m.textInput.Placeholder = fmt.Sprintf("%s <resource> [name] [flags]", verb)
-	m.textInput.Focus()
-	m.previousScreen = m.currentScreen
-	m.currentScreen = SaveFavouriteScreen
-
-	// Build a provisional command prefix so the preview and help flows work
-	m.currentCommand = "kubectl " + verb
-
-	return m, nil
+	return m.navigateToCommandPreview(), nil
 }
 
 func (m Model) handleSaveOutputName() (tea.Model, tea.Cmd) {
