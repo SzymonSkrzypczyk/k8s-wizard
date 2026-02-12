@@ -306,6 +306,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.viewport.SetContent(output)
+		// Preserve the full command output separately for saving, independent of viewport rendering
+		m.currentOutputContent = output
 		m.currentScreen = CommandOutputScreen
 		return m, nil
 
@@ -317,6 +319,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			output = "Help Output:\n" + output
 		}
 		m.viewport.SetContent(output)
+		// Keep full help text available in case we later support saving it
+		m.currentOutputContent = output
 		m.currentScreen = CommandHelpScreen
 		return m, nil
 
@@ -341,6 +345,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.viewport.SetContent(output)
+		// Track full connectivity output for consistency, even if we don't save it yet
+		m.currentOutputContent = output
 		m.currentScreen = ClusterConnectivityScreen
 		return m, nil
 
@@ -719,7 +725,6 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if ok {
-				m.currentOutputContent = m.viewport.View()
 				return m, m.saveOutput(baseName)
 			}
 			return m.navigateToSaveOutputName(), nil
@@ -1729,7 +1734,6 @@ func (m Model) updateSavedOutputsIndexOnRename(oldName string, newName string) e
 }
 
 func (m Model) navigateToSaveOutputName() Model {
-	m.currentOutputContent = m.viewport.View()
 	m.textInput.SetValue("")
 	m.textInput.Placeholder = "Enter name (e.g. pods-output)"
 	m.textInput.Focus()
@@ -1806,6 +1810,8 @@ func (m Model) navigateToSavedOutputVersions(base string) Model {
 func (m Model) navigateToSavedOutputView(filename string, content string) Model {
 	m.selectedSavedOutput = filename
 	m.viewport.SetContent(content)
+	// When viewing a saved output, keep its full content in sync as well
+	m.currentOutputContent = content
 	m.previousScreen = m.currentScreen
 	m.currentScreen = SavedOutputViewScreen
 	return m
