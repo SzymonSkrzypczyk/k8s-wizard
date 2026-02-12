@@ -44,17 +44,37 @@ func (c *Client) GetPodLogs(podName string) (CommandResult, error) {
 
 // ListPodNames returns a list of pod names in the current namespace
 func (c *Client) ListPodNames() ([]string, error) {
-	result, err := c.execute("get", "pods", "-o", "jsonpath={.items[*].metadata.name}")
-	if err != nil {
-		return nil, err
-	}
-	if result.Error != "" {
-		return nil, fmt.Errorf("kubectl error: %s", result.Error)
-	}
+	return c.listResourceNames("pods")
+}
 
-	// Split space-separated pod names
-	names := strings.Fields(result.Output)
-	return names, nil
+// ListDeploymentNames returns a list of deployment names in the current namespace
+func (c *Client) ListDeploymentNames() ([]string, error) {
+	return c.listResourceNames("deployments")
+}
+
+// ListServiceNames returns a list of service names in the current namespace
+func (c *Client) ListServiceNames() ([]string, error) {
+	return c.listResourceNames("services")
+}
+
+// ListNodeNames returns a list of node names in the cluster
+func (c *Client) ListNodeNames() ([]string, error) {
+	return c.listResourceNames("nodes")
+}
+
+// ListConfigMapNames returns a list of configmap names in the current namespace
+func (c *Client) ListConfigMapNames() ([]string, error) {
+	return c.listResourceNames("configmaps")
+}
+
+// ListSecretNames returns a list of secret names in the current namespace
+func (c *Client) ListSecretNames() ([]string, error) {
+	return c.listResourceNames("secrets")
+}
+
+// ListIngressNames returns a list of ingress names in the current namespace
+func (c *Client) ListIngressNames() ([]string, error) {
+	return c.listResourceNames("ingress")
 }
 
 // GetCurrentContext checks if a Kubernetes cluster context is configured
@@ -66,13 +86,28 @@ func (c *Client) GetCurrentContext() (string, error) {
 	if result.Error != "" {
 		return "", fmt.Errorf("no cluster context configured: %s", result.Error)
 	}
-	
+
 	context := strings.TrimSpace(result.Output)
 	if context == "" {
 		return "", fmt.Errorf("no cluster context configured")
 	}
-	
+
 	return context, nil
+}
+
+// listResourceNames is a helper that lists resource names using a common jsonpath
+func (c *Client) listResourceNames(resource string) ([]string, error) {
+	result, err := c.execute("get", resource, "-o", "jsonpath={.items[*].metadata.name}")
+	if err != nil {
+		return nil, err
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("kubectl error: %s", result.Error)
+	}
+
+	// Split space-separated names
+	names := strings.Fields(result.Output)
+	return names, nil
 }
 
 // ExecuteRaw executes a raw kubectl command string with cluster validation

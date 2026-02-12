@@ -4,8 +4,8 @@ import "github.com/k8s-wizard/internal/kubectl"
 
 // Messages are custom events sent through the Bubble Tea update loop
 
-// podNamesLoadedMsg is sent when pod names have been fetched
-type podNamesLoadedMsg struct {
+// resourceNamesLoadedMsg is sent when resource names have been fetched for selection
+type resourceNamesLoadedMsg struct {
 	names []string
 	err   error
 }

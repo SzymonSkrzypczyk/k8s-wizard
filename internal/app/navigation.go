@@ -47,6 +47,11 @@ type ResourceType int
 const (
 	ResourcePods ResourceType = iota
 	ResourceDeployments
+	ResourceServices
+	ResourceNodes
+	ResourceConfigMaps
+	ResourceSecrets
+	ResourceIngress
 )
 
 // Action represents an action to perform on a resource
@@ -65,6 +70,16 @@ func (r ResourceType) String() string {
 		return "Pods"
 	case ResourceDeployments:
 		return "Deployments"
+	case ResourceServices:
+		return "Services"
+	case ResourceNodes:
+		return "Nodes"
+	case ResourceConfigMaps:
+		return "ConfigMaps"
+	case ResourceSecrets:
+		return "Secrets"
+	case ResourceIngress:
+		return "Ingress"
 	default:
 		return "Unknown"
 	}
@@ -90,13 +105,43 @@ func buildCommand(resource ResourceType, action Action, resourceName string, fla
 
 	switch action {
 	case ActionGet:
-		if resource == ResourcePods {
+		switch resource {
+		case ResourcePods:
 			cmd += "get pods"
-		} else {
+		case ResourceDeployments:
 			cmd += "get deployments"
+		case ResourceServices:
+			cmd += "get services"
+		case ResourceNodes:
+			cmd += "get nodes"
+		case ResourceConfigMaps:
+			cmd += "get configmaps"
+		case ResourceSecrets:
+			cmd += "get secrets"
+		case ResourceIngress:
+			cmd += "get ingress"
+		default:
+			cmd += "get"
 		}
 	case ActionDescribe:
-		cmd += "describe pod " + resourceName
+		switch resource {
+		case ResourcePods:
+			cmd += "describe pod " + resourceName
+		case ResourceDeployments:
+			cmd += "describe deployment " + resourceName
+		case ResourceServices:
+			cmd += "describe service " + resourceName
+		case ResourceNodes:
+			cmd += "describe node " + resourceName
+		case ResourceConfigMaps:
+			cmd += "describe configmap " + resourceName
+		case ResourceSecrets:
+			cmd += "describe secret " + resourceName
+		case ResourceIngress:
+			cmd += "describe ingress " + resourceName
+		default:
+			cmd += "describe " + resource.String() + " " + resourceName
+		}
 	case ActionLogs:
 		cmd += "logs " + resourceName
 	}

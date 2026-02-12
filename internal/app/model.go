@@ -284,15 +284,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
-	case podNamesLoadedMsg:
+	case resourceNamesLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
 		}
 
-		// Create list of pod names
+		// Create list of resource names
 		items := ui.StringsToItems(msg.names)
-		m.list = ui.NewList(items, "Select Pod", m.width, m.height-4)
+		title := fmt.Sprintf("Select %s", strings.TrimSuffix(m.selectedResource.String(), "s"))
+		m.list = ui.NewList(items, title, m.width, m.height-4)
 		m.currentScreen = ResourceNameSelectionScreen
 		return m, nil
 
@@ -961,6 +962,11 @@ func (m Model) navigateToResourceSelection() Model {
 	items := []list.Item{
 		ui.NewSimpleItem("Pods", "Manage pods"),
 		ui.NewSimpleItem("Deployments", "Manage deployments"),
+		ui.NewSimpleItem("Services", "Inspect services"),
+		ui.NewSimpleItem("Nodes", "Inspect cluster nodes"),
+		ui.NewSimpleItem("ConfigMaps", "Inspect configuration data"),
+		ui.NewSimpleItem("Secrets", "Inspect secrets (careful: may show sensitive data)"),
+		ui.NewSimpleItem("Ingress", "Inspect ingress resources"),
 	}
 	m.list = ui.NewList(items, "Select Resource Type", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
@@ -971,15 +977,45 @@ func (m Model) navigateToResourceSelection() Model {
 func (m Model) navigateToActionSelection() Model {
 	var items []list.Item
 
-	if m.selectedResource == ResourcePods {
+	switch m.selectedResource {
+	case ResourcePods:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all pods"),
 			ui.NewSimpleItem("Describe", "Describe a specific pod"),
 			ui.NewSimpleItem("Logs", "View logs from a pod"),
 		}
-	} else {
+	case ResourceDeployments:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all deployments"),
+		}
+	case ResourceServices:
+		items = []list.Item{
+			ui.NewSimpleItem("Get", "List all services"),
+			ui.NewSimpleItem("Describe", "Describe a specific service"),
+		}
+	case ResourceNodes:
+		items = []list.Item{
+			ui.NewSimpleItem("Get", "List all nodes"),
+			ui.NewSimpleItem("Describe", "Describe a specific node"),
+		}
+	case ResourceConfigMaps:
+		items = []list.Item{
+			ui.NewSimpleItem("Get", "List all configmaps"),
+			ui.NewSimpleItem("Describe", "Describe a specific configmap"),
+		}
+	case ResourceSecrets:
+		items = []list.Item{
+			ui.NewSimpleItem("Get", "List all secrets"),
+			ui.NewSimpleItem("Describe", "Describe a specific secret (may reveal sensitive data)"),
+		}
+	case ResourceIngress:
+		items = []list.Item{
+			ui.NewSimpleItem("Get", "List all ingress resources"),
+			ui.NewSimpleItem("Describe", "Describe a specific ingress"),
+		}
+	default:
+		items = []list.Item{
+			ui.NewSimpleItem("Get", "List resources"),
 		}
 	}
 
@@ -1228,6 +1264,18 @@ func (m Model) handleResourceSelection() (tea.Model, tea.Cmd) {
 		m.selectedResource = ResourcePods
 	case "Deployments":
 		m.selectedResource = ResourceDeployments
+	case "Services":
+		m.selectedResource = ResourceServices
+	case "Nodes":
+		m.selectedResource = ResourceNodes
+	case "ConfigMaps":
+		m.selectedResource = ResourceConfigMaps
+	case "Secrets":
+		m.selectedResource = ResourceSecrets
+	case "Ingress":
+		m.selectedResource = ResourceIngress
+	default:
+		return m, nil
 	}
 
 	return m.navigateToActionSelection(), nil
@@ -1249,8 +1297,8 @@ func (m Model) handleActionSelection() (tea.Model, tea.Cmd) {
 
 	case "Describe":
 		m.selectedAction = ActionDescribe
-		// Need to fetch pod names
-		return m, m.fetchPodNames()
+		// Need to fetch resource names for selection
+		return m, m.fetchResourceNames()
 
 	case "Logs":
 		m.selectedAction = ActionLogs
@@ -1500,7 +1548,37 @@ func (m Model) handleNamespaceInput() (tea.Model, tea.Cmd) {
 func (m Model) fetchPodNames() tea.Cmd {
 	return func() tea.Msg {
 		names, err := m.kubectlClient.ListPodNames()
-		return podNamesLoadedMsg{names: names, err: err}
+		return resourceNamesLoadedMsg{names: names, err: err}
+	}
+}
+
+func (m Model) fetchResourceNames() tea.Cmd {
+	return func() tea.Msg {
+		var (
+			names []string
+			err   error
+		)
+
+		switch m.selectedResource {
+		case ResourcePods:
+			names, err = m.kubectlClient.ListPodNames()
+		case ResourceDeployments:
+			names, err = m.kubectlClient.ListDeploymentNames()
+		case ResourceServices:
+			names, err = m.kubectlClient.ListServiceNames()
+		case ResourceNodes:
+			names, err = m.kubectlClient.ListNodeNames()
+		case ResourceConfigMaps:
+			names, err = m.kubectlClient.ListConfigMapNames()
+		case ResourceSecrets:
+			names, err = m.kubectlClient.ListSecretNames()
+		case ResourceIngress:
+			names, err = m.kubectlClient.ListIngressNames()
+		default:
+			err = fmt.Errorf("unsupported resource type: %s", m.selectedResource.String())
+		}
+
+		return resourceNamesLoadedMsg{names: names, err: err}
 	}
 }
 
