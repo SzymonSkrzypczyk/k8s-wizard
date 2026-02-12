@@ -77,6 +77,37 @@ func (c *Client) ListIngressNames() ([]string, error) {
 	return c.listResourceNames("ingress")
 }
 
+// ListNamespaceNames returns a list of namespaces in the cluster
+func (c *Client) ListNamespaceNames() ([]string, error) {
+	return c.listResourceNames("namespaces")
+}
+
+// ListContexts returns the available kube contexts
+func (c *Client) ListContexts() ([]string, error) {
+	result, err := c.execute("config", "get-contexts", "-o", "name")
+	if err != nil {
+		return nil, err
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("kubectl error: %s", result.Error)
+	}
+
+	names := strings.Fields(result.Output)
+	return names, nil
+}
+
+// UseContext switches the current kube context
+func (c *Client) UseContext(name string) error {
+	result, err := c.execute("config", "use-context", name)
+	if err != nil {
+		return err
+	}
+	if result.Error != "" {
+		return fmt.Errorf("kubectl error: %s", result.Error)
+	}
+	return nil
+}
+
 // GetCurrentContext checks if a Kubernetes cluster context is configured
 func (c *Client) GetCurrentContext() (string, error) {
 	result, err := c.execute("config", "current-context")

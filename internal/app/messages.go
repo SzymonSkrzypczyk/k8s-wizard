@@ -26,6 +26,12 @@ type clusterConnectivityCheckedMsg struct {
 	err    error
 }
 
+// contextSwitchedMsg is sent after attempting to switch kube context
+type contextSwitchedMsg struct {
+	newContext string
+	err        error
+}
+
 // favouriteSavedMsg is sent when a favourite has been saved
 type favouriteSavedMsg struct {
 	err error

@@ -66,6 +66,9 @@ type Model struct {
 
 	// Error state
 	err error
+
+	// Default namespace applied to commands when no explicit namespace flag is chosen
+	defaultNamespace string
 }
 
 func (m Model) isTextInputScreen() bool {
@@ -350,6 +353,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentOutputContent = output
 		m.currentScreen = ClusterConnectivityScreen
 		return m, nil
+
+	case contextSwitchedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.err = fmt.Errorf("✓ Switched context to %s", msg.newContext)
+		return m.navigateToMainMenu(), nil
 
 	case favouriteSavedMsg:
 		if msg.err != nil {
@@ -846,6 +857,15 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case CommandHistoryScreen:
 		return m.handleCommandHistorySelection()
+
+	case ContextsNamespacesMenuScreen:
+		return m.handleContextsAndNamespacesMenuSelection()
+
+	case ContextsListScreen:
+		return m.handleContextSelection()
+
+	case NamespacesListScreen:
+		return m.handleNamespaceSelection()
 	}
 
 	return m, nil
@@ -873,6 +893,7 @@ func (m Model) navigateToMainMenu() Model {
 		ui.NewSimpleItem("Command History", "View and re-run previous commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
 		ui.NewSimpleItem("Hotkeys", "Manage hotkey bindings"),
+		ui.NewSimpleItem("Contexts & Namespaces", "Manage kube contexts and default namespace"),
 		ui.NewSimpleItem("Check Cluster Connectivity", "Verify connection to Kubernetes cluster"),
 		ui.NewSimpleItem("Exit", "Quit the application"),
 	}
@@ -917,6 +938,81 @@ func (m Model) navigateToHotkeysList() Model {
 	m.list = ui.NewList(items, "Hotkeys ('d'=unbind, Esc=back)", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = HotkeysListScreen
+	return m
+}
+
+func (m Model) navigateToContextsAndNamespacesMenu() Model {
+	items := []list.Item{
+		ui.NewSimpleItem("Switch Context", "Switch the current kube context"),
+		ui.NewSimpleItem("Set Default Namespace", "Choose a default namespace for commands"),
+		ui.NewSimpleItem("Back to Main Menu", "Return to the main menu"),
+	}
+	m.list = ui.NewList(items, "Contexts & Namespaces", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = ContextsNamespacesMenuScreen
+	return m
+}
+
+func (m Model) navigateToContextsList() Model {
+	items := []list.Item{}
+
+	currentCtx, err := m.kubectlClient.GetCurrentContext()
+	if err != nil {
+		m.err = err
+	}
+
+	contexts, listErr := m.kubectlClient.ListContexts()
+	if listErr != nil {
+		m.err = listErr
+		items = []list.Item{
+			ui.NewSimpleItem("Unable to load contexts", listErr.Error()),
+		}
+	} else if len(contexts) == 0 {
+		items = []list.Item{
+			ui.NewSimpleItem("No contexts found", "Configure kubeconfig to add contexts"),
+		}
+	} else {
+		for _, name := range contexts {
+			desc := ""
+			if name == currentCtx {
+				desc = "(current)"
+			}
+			items = append(items, ui.NewSimpleItem(name, desc))
+		}
+	}
+
+	m.list = ui.NewList(items, "Kube Contexts (Enter=switch)", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = ContextsListScreen
+	return m
+}
+
+func (m Model) navigateToNamespacesList() Model {
+	items := []list.Item{}
+
+	namespaces, err := m.kubectlClient.ListNamespaceNames()
+	if err != nil {
+		m.err = err
+		items = []list.Item{
+			ui.NewSimpleItem("Unable to load namespaces", err.Error()),
+		}
+	} else if len(namespaces) == 0 {
+		items = []list.Item{
+			ui.NewSimpleItem("No namespaces found", "Create namespaces to select a default"),
+		}
+	} else {
+		for _, ns := range namespaces {
+			desc := ""
+			if ns == m.defaultNamespace {
+				desc = "(current default)"
+			}
+			items = append(items, ui.NewSimpleItem(ns, desc))
+		}
+	}
+
+	m.list = ui.NewList(items, "Namespaces (Enter=set default)", m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = NamespacesListScreen
 	return m
 }
 
@@ -1218,6 +1314,12 @@ func (m Model) navigateBack() Model {
 		return m.navigateToSavedOutputsGroups()
 	case SaveOutputNameScreen:
 		return m.navigateToCommandOutput()
+	case ContextsNamespacesMenuScreen:
+		return m.navigateToMainMenu()
+	case ContextsListScreen:
+		return m.navigateToContextsAndNamespacesMenu()
+	case NamespacesListScreen:
+		return m.navigateToContextsAndNamespacesMenu()
 	default:
 		return m.navigateToMainMenu()
 	}
@@ -1244,6 +1346,8 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 		return m.loadSavedOutputs()
 	case "Hotkeys":
 		return m.navigateToHotkeysList(), nil
+	case "Contexts & Namespaces":
+		return m.navigateToContextsAndNamespacesMenu(), nil
 	case "Check Cluster Connectivity":
 		return m, m.checkClusterConnectivity()
 	case "Exit":
@@ -1340,7 +1444,14 @@ func (m Model) handleFlagsSelection() (tea.Model, tea.Cmd) {
 		if m.needsNamespaceInput {
 			return m.navigateToNamespaceInput(), nil
 		}
-		// Build command with selected flags
+
+		// If a default namespace is configured and the user hasn't explicitly
+		// chosen a namespace or all-namespaces flag, apply it implicitly.
+		if m.defaultNamespace != "" && !m.hasExplicitNamespaceFlag() {
+			m.selectedFlags = append(m.selectedFlags, "-n "+m.defaultNamespace)
+		}
+
+		// Build command with selected flags (including any implicit namespace)
 		m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
 		// Navigate to command preview
 		return m.navigateToCommandPreview(), nil
@@ -1469,6 +1580,63 @@ func (m Model) handleCommandPreviewSelection() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleContextsAndNamespacesMenuSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+
+	switch title {
+	case "Switch Context":
+		return m.navigateToContextsList(), nil
+	case "Set Default Namespace":
+		return m.navigateToNamespacesList(), nil
+	case "Back to Main Menu":
+		return m.navigateToMainMenu(), nil
+	}
+
+	return m, nil
+}
+
+func (m Model) handleContextSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+	if title == "Unable to load contexts" || title == "No contexts found" {
+		return m, nil
+	}
+
+	return m, m.switchContext(title)
+}
+
+func (m Model) handleNamespaceSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+	if title == "Unable to load namespaces" || title == "No namespaces found" {
+		return m, nil
+	}
+
+	m.defaultNamespace = title
+	m.err = fmt.Errorf("✓ Default namespace set to %s", title)
+	return m.navigateToContextsAndNamespacesMenu(), nil
+}
+
+func (m Model) switchContext(name string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.kubectlClient.UseContext(name)
+		return contextSwitchedMsg{newContext: name, err: err}
+	}
+}
+
 func (m Model) handleFavouriteSelection() (tea.Model, tea.Cmd) {
 	if m.favStore == nil {
 		return m, nil
@@ -1585,6 +1753,15 @@ func (m Model) fetchResourceNames() tea.Cmd {
 
 		return resourceNamesLoadedMsg{names: names, err: err}
 	}
+}
+
+func (m Model) hasExplicitNamespaceFlag() bool {
+	for _, f := range m.selectedFlags {
+		if f == "-A" || strings.HasPrefix(f, "-n ") || strings.HasPrefix(f, "-n=") {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) executeCommand() tea.Cmd {

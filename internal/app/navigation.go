@@ -39,6 +39,12 @@ const (
 	// SavedOutputViewScreen shows a saved output
 	SavedOutputViewScreen
 	RenameSavedOutputScreen
+	// ContextsNamespacesMenuScreen shows context/namespace operations
+	ContextsNamespacesMenuScreen
+	// ContextsListScreen shows available kube contexts
+	ContextsListScreen
+	// NamespacesListScreen shows available namespaces for default selection
+	NamespacesListScreen
 )
 
 // ResourceType represents the type of Kubernetes resource
