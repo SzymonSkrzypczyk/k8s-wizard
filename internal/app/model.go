@@ -987,6 +987,8 @@ func (m Model) navigateToActionSelection() Model {
 	case ResourceDeployments:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all deployments"),
+			ui.NewSimpleItem("Describe", "Describe a specific deployment"),
+			ui.NewSimpleItem("Logs", "View logs for a deployment"),
 		}
 	case ResourceServices:
 		items = []list.Item{
@@ -1302,8 +1304,11 @@ func (m Model) handleActionSelection() (tea.Model, tea.Cmd) {
 
 	case "Logs":
 		m.selectedAction = ActionLogs
-		// Need to fetch pod names
-		return m, m.fetchPodNames()
+		// Need to fetch names for the selected resource
+		if m.selectedResource == ResourcePods {
+			return m, m.fetchPodNames()
+		}
+		return m, m.fetchResourceNames()
 	}
 
 	return m, nil

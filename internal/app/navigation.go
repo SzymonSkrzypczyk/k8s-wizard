@@ -143,7 +143,14 @@ func buildCommand(resource ResourceType, action Action, resourceName string, fla
 			cmd += "describe " + resource.String() + " " + resourceName
 		}
 	case ActionLogs:
-		cmd += "logs " + resourceName
+		switch resource {
+		case ResourcePods:
+			cmd += "logs " + resourceName
+		case ResourceDeployments:
+			cmd += "logs deployment/" + resourceName
+		default:
+			cmd += "logs " + resourceName
+		}
 	}
 
 	// Append flags if any
