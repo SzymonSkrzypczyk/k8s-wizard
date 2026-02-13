@@ -111,6 +111,7 @@ func (m Model) navigateToActionSelection() Model {
 	case ResourcePods:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all pods"),
+			ui.NewSimpleItem("Top (Metrics)", "View CPU/Memory usage and pods"),
 			ui.NewSimpleItem("Describe", "Describe a specific pod"),
 			ui.NewSimpleItem("Logs", "View logs from a pod"),
 			ui.NewSimpleItem("Exec", "Execute shell in a pod"),
@@ -139,6 +140,7 @@ func (m Model) navigateToActionSelection() Model {
 	case ResourceNodes:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all nodes"),
+			ui.NewSimpleItem("Top (Metrics)", "View CPU/Memory usage for nodes"),
 			ui.NewSimpleItem("Describe", "Describe a specific node"),
 			ui.NewSimpleItem("Edit", "Edit node YAML"),
 			ui.NewSimpleItem("Delete", "Delete a node"),
@@ -250,6 +252,14 @@ func (m Model) navigateToFlagsSelection() Model {
 			ui.NewSimpleItem("[ ] --since=5m", "Show logs from last 5 minutes"),
 			ui.NewSimpleItem("[ ] --previous", "Show logs from previous container"),
 			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
+		}
+	case ActionTop:
+		items = []list.Item{
+			ui.NewSimpleItem("Done (Continue)", "Proceed with selected flags"),
+			ui.NewSimpleItem("---", ""),
+			ui.NewSimpleItem("[ ] -A", "All namespaces"),
+			ui.NewSimpleItem("[ ] -n <namespace>", "Specify custom namespace"),
+			ui.NewSimpleItem("[ ] --use-protocol-buffers", "Use protocol buffers for communication"),
 		}
 	}
 

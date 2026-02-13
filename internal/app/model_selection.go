@@ -123,6 +123,10 @@ func (m Model) handleActionSelection() (tea.Model, tea.Cmd) {
 	case "Port Forward":
 		m.selectedAction = ActionPortForward
 		return m, m.fetchResourceNames()
+
+	case "Top (Metrics)":
+		m.selectedAction = ActionTop
+		return m.navigateToFlagsSelection(), nil
 	}
 
 	return m, nil
