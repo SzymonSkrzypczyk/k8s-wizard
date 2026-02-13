@@ -113,38 +113,57 @@ func (m Model) navigateToActionSelection() Model {
 			ui.NewSimpleItem("Get", "List all pods"),
 			ui.NewSimpleItem("Describe", "Describe a specific pod"),
 			ui.NewSimpleItem("Logs", "View logs from a pod"),
+			ui.NewSimpleItem("Exec", "Execute shell in a pod"),
+			ui.NewSimpleItem("Port Forward", "Forward local port to pod"),
+			ui.NewSimpleItem("Edit", "Edit pod YAML"),
+			ui.NewSimpleItem("Delete", "Delete a pod"),
 		}
 	case ResourceDeployments:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all deployments"),
 			ui.NewSimpleItem("Describe", "Describe a specific deployment"),
 			ui.NewSimpleItem("Logs", "View logs for a deployment"),
+			ui.NewSimpleItem("Exec", "Execute shell in a deployment pod"),
+			ui.NewSimpleItem("Port Forward", "Forward local port to deployment"),
+			ui.NewSimpleItem("Edit", "Edit deployment YAML"),
+			ui.NewSimpleItem("Delete", "Delete a deployment"),
 		}
 	case ResourceServices:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all services"),
 			ui.NewSimpleItem("Describe", "Describe a specific service"),
+			ui.NewSimpleItem("Port Forward", "Forward local port to service"),
+			ui.NewSimpleItem("Edit", "Edit service YAML"),
+			ui.NewSimpleItem("Delete", "Delete a service"),
 		}
 	case ResourceNodes:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all nodes"),
 			ui.NewSimpleItem("Describe", "Describe a specific node"),
+			ui.NewSimpleItem("Edit", "Edit node YAML"),
+			ui.NewSimpleItem("Delete", "Delete a node"),
 		}
 	case ResourceConfigMaps:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all configmaps"),
 			ui.NewSimpleItem("Describe", "Describe a specific configmap"),
+			ui.NewSimpleItem("Edit", "Edit configmap YAML"),
+			ui.NewSimpleItem("Delete", "Delete a configmap"),
 		}
 	case ResourceSecrets:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all secrets"),
 			ui.NewSimpleItem("Describe", "Describe a specific secret (may reveal sensitive data)"),
 			ui.NewSimpleItem("Extract Field", "Pick a field to decode and view"),
+			ui.NewSimpleItem("Edit", "Edit secret YAML"),
+			ui.NewSimpleItem("Delete", "Delete a secret"),
 		}
 	case ResourceIngress:
 		items = []list.Item{
 			ui.NewSimpleItem("Get", "List all ingress resources"),
 			ui.NewSimpleItem("Describe", "Describe a specific ingress"),
+			ui.NewSimpleItem("Edit", "Edit ingress YAML"),
+			ui.NewSimpleItem("Delete", "Delete an ingress"),
 		}
 	default:
 		items = []list.Item{
@@ -155,6 +174,27 @@ func (m Model) navigateToActionSelection() Model {
 	m.list = ui.NewList(items, "Select Action", m.width, m.height-4)
 	m.previousScreen = m.currentScreen
 	m.currentScreen = ActionSelectionScreen
+	return m
+}
+
+func (m Model) navigateToPortInput() Model {
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = "Enter ports (e.g. 8080:80)"
+	m.textInput.Focus()
+	m.previousScreen = m.currentScreen
+	m.currentScreen = PortInputScreen
+	return m
+}
+
+func (m Model) navigateToDeleteConfirmation() Model {
+	items := []list.Item{
+		ui.NewSimpleItem("Cancel", "Go back without deleting"),
+		ui.NewSimpleItem("Confirm Delete", fmt.Sprintf("Permanently delete %s %s", getResourceShortName(m.selectedResource), m.selectedResourceName)),
+	}
+	title := fmt.Sprintf("⚠️  CONFIRM DELETION: %s %s", getResourceShortName(m.selectedResource), m.selectedResourceName)
+	m.list = ui.NewList(items, title, m.width, m.height-4)
+	m.previousScreen = m.currentScreen
+	m.currentScreen = DeleteConfirmationScreen
 	return m
 }
 
@@ -339,6 +379,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToContextsAndNamespacesMenu()
 	case NamespacesListScreen:
 		return m.navigateToContextsAndNamespacesMenu()
+	case PortInputScreen:
+		return m.navigateToActionSelection()
 	default:
 		return m.navigateToMainMenu()
 	}

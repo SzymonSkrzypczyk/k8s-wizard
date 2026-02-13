@@ -531,6 +531,12 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	case SecretFieldSelectionScreen:
 		return m.handleSecretFieldSelection()
+
+	case DeleteConfirmationScreen:
+		return m.handleDeleteConfirmationSelection()
+
+	case PortInputScreen:
+		return m.handlePortInput()
 	}
 
 	return m, nil

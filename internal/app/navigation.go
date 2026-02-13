@@ -51,6 +51,10 @@ const (
 	SecretFieldSelectionScreen
 	// ClusterInfoScreen displays cluster information and metrics
 	ClusterInfoScreen
+	// DeleteConfirmationScreen asks for confirmation before deleting a resource
+	DeleteConfirmationScreen
+	// PortInputScreen allows entering ports for port-forwarding
+	PortInputScreen
 )
 
 // ResourceType represents the type of Kubernetes resource
@@ -74,6 +78,11 @@ const (
 	ActionDescribe
 	ActionLogs
 	ActionExtractField
+	ActionEdit
+	ActionDelete
+	ActionExec
+	ActionPortForward
+	ActionTop
 )
 
 // String returns the string representation of a ResourceType
@@ -109,6 +118,16 @@ func (a Action) String() string {
 		return "Logs"
 	case ActionExtractField:
 		return "Extract Field"
+	case ActionEdit:
+		return "Edit"
+	case ActionDelete:
+		return "Delete"
+	case ActionExec:
+		return "Exec"
+	case ActionPortForward:
+		return "Port Forward"
+	case ActionTop:
+		return "Top (Metrics)"
 	default:
 		return "Unknown"
 	}
@@ -171,6 +190,32 @@ func buildCommand(resource ResourceType, action Action, resourceName string, fla
 		if resource == ResourceSecrets {
 			cmd += "get secret " + resourceName + " -o go-template='{{range $k, $v := .data}}{{$k}}: {{$v | base64decode}}{{\"\\n\"}}{{end}}'"
 		}
+	case ActionEdit:
+		cmd += "edit " + getResourceShortName(resource) + " " + resourceName
+	case ActionDelete:
+		cmd += "delete " + getResourceShortName(resource) + " " + resourceName
+	case ActionExec:
+		if resource == ResourcePods {
+			cmd += "exec -it " + resourceName + " -- /bin/sh"
+		} else if resource == ResourceDeployments {
+			cmd += "exec -it deployment/" + resourceName + " -- /bin/sh"
+		}
+	case ActionPortForward:
+		if resource == ResourcePods {
+			cmd += "port-forward pod/" + resourceName
+		} else if resource == ResourceServices {
+			cmd += "port-forward svc/" + resourceName
+		} else if resource == ResourceDeployments {
+			cmd += "port-forward deployment/" + resourceName
+		}
+	case ActionTop:
+		if resource == ResourcePods {
+			cmd += "top pod"
+		} else if resource == ResourceNodes {
+			cmd += "top node"
+		} else {
+			cmd += "top " + getResourceShortName(resource)
+		}
 	}
 
 	// Append flags if any
@@ -181,4 +226,25 @@ func buildCommand(resource ResourceType, action Action, resourceName string, fla
 	}
 
 	return cmd
+}
+
+func getResourceShortName(r ResourceType) string {
+	switch r {
+	case ResourcePods:
+		return "pod"
+	case ResourceDeployments:
+		return "deployment"
+	case ResourceServices:
+		return "service"
+	case ResourceNodes:
+		return "node"
+	case ResourceConfigMaps:
+		return "configmap"
+	case ResourceSecrets:
+		return "secret"
+	case ResourceIngress:
+		return "ingress"
+	default:
+		return ""
+	}
 }

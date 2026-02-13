@@ -3,9 +3,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/k8s-wizard/internal/kubectl"
 )
 
 // Command execution and kubectl helpers.
@@ -139,6 +141,18 @@ func (m Model) fetchSecretKeys() tea.Cmd {
 }
 
 func (m Model) executeCommand() tea.Cmd {
+	if isInteractiveCommand(m.currentCommand) {
+		// For interactive commands, we use tea.ExecProcess
+		args := strings.Fields(strings.TrimPrefix(m.currentCommand, "kubectl "))
+		c := exec.Command("kubectl", args...)
+		return tea.ExecProcess(c, func(err error) tea.Msg {
+			if err != nil {
+				return commandExecutedMsg{err: err}
+			}
+			return commandExecutedMsg{result: kubectl.CommandResult{Output: "Interactive command completed"}}
+		})
+	}
+
 	return func() tea.Msg {
 		// Add to history
 		if m.historyStore != nil && strings.TrimSpace(m.currentCommand) != "" {
@@ -148,4 +162,18 @@ func (m Model) executeCommand() tea.Cmd {
 		result, err := m.kubectlClient.ExecuteRaw(m.currentCommand)
 		return commandExecutedMsg{result: result, err: err}
 	}
+}
+
+func isInteractiveCommand(cmd string) bool {
+	cmd = strings.TrimSpace(cmd)
+	if strings.Contains(cmd, " edit ") {
+		return true
+	}
+	if strings.Contains(cmd, " exec ") {
+		return true
+	}
+	if strings.Contains(cmd, " port-forward ") {
+		return true
+	}
+	return false
 }

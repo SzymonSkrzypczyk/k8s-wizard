@@ -107,6 +107,22 @@ func (m Model) handleActionSelection() (tea.Model, tea.Cmd) {
 		m.selectedAction = ActionExtractField
 		// Need to fetch resource names for selection
 		return m, m.fetchResourceNames()
+
+	case "Edit":
+		m.selectedAction = ActionEdit
+		return m, m.fetchResourceNames()
+
+	case "Delete":
+		m.selectedAction = ActionDelete
+		return m, m.fetchResourceNames()
+
+	case "Exec":
+		m.selectedAction = ActionExec
+		return m, m.fetchResourceNames()
+
+	case "Port Forward":
+		m.selectedAction = ActionPortForward
+		return m, m.fetchResourceNames()
 	}
 
 	return m, nil
@@ -122,6 +138,14 @@ func (m Model) handleResourceNameSelection() (tea.Model, tea.Cmd) {
 
 	if m.selectedAction == ActionExtractField {
 		return m, m.fetchSecretKeys()
+	}
+
+	if m.selectedAction == ActionDelete {
+		return m.navigateToDeleteConfirmation(), nil
+	}
+
+	if m.selectedAction == ActionPortForward {
+		return m.navigateToPortInput(), nil
 	}
 
 	// Go to flags selection
@@ -440,6 +464,40 @@ func (m Model) handleSecretFieldSelection() (tea.Model, tea.Cmd) {
 		m.currentCommand += " -n " + m.defaultNamespace
 	}
 
+	return m.navigateToCommandPreview(), nil
+}
+
+	return m.navigateToCommandPreview(), nil
+}
+
+func (m Model) handleDeleteConfirmationSelection() (tea.Model, tea.Cmd) {
+	selected := m.list.SelectedItem()
+	if selected == nil {
+		return m, nil
+	}
+
+	title := selected.(ui.SimpleItem).Title()
+
+	if title == "Confirm Delete" {
+		m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
+		return m, m.executeCommand()
+	}
+
+	// Cancel - go back to name selection
+	return m, m.fetchResourceNames()
+}
+
+func (m Model) handlePortInput() (tea.Model, tea.Cmd) {
+	ports := m.textInput.Value()
+	if ports == "" {
+		return m, nil
+	}
+
+	// Build command with ports
+	m.currentCommand = buildCommand(m.selectedResource, m.selectedAction, m.selectedResourceName, m.selectedFlags)
+	m.currentCommand += " " + ports
+
+	// Navigate to command preview
 	return m.navigateToCommandPreview(), nil
 }
 
