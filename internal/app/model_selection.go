@@ -471,9 +471,6 @@ func (m Model) handleSecretFieldSelection() (tea.Model, tea.Cmd) {
 	return m.navigateToCommandPreview(), nil
 }
 
-	return m.navigateToCommandPreview(), nil
-}
-
 func (m Model) handleDeleteConfirmationSelection() (tea.Model, tea.Cmd) {
 	selected := m.list.SelectedItem()
 	if selected == nil {
