@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/k8s-wizard/internal/ui"
 )
@@ -232,7 +234,17 @@ func (m Model) navigateToSecretFieldSelection(keys []string) Model {
 	}
 
 	for _, k := range keys {
-		items = append(items, ui.NewSimpleItem(k, "Extract and decode this data field"))
+		var description string
+		if strings.HasPrefix(k, "data.") {
+			description = "Extract and decode this base64-encoded data field"
+		} else if strings.HasPrefix(k, "stringData.") {
+			description = "Extract this plain text field"
+		} else if strings.HasPrefix(k, "metadata.") {
+			description = "Extract this metadata field"
+		} else {
+			description = "Extract this field"
+		}
+		items = append(items, ui.NewSimpleItem(k, description))
 	}
 
 	m.list = ui.NewList(items, "Select Field to Extract", m.width, m.height-4)

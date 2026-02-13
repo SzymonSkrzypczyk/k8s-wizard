@@ -167,7 +167,7 @@ func buildCommand(resource ResourceType, action Action, resourceName string, fla
 	case ActionExtractField:
 		// This is partially handled in handleSecretFieldSelection, but for consistency:
 		if resource == ResourceSecrets {
-			cmd += "get secret " + resourceName + " -o go-template='{{range $k, $v := .data}}{{$k}}: {{$v | base64decode}}{\"\\n\"}{{end}}'"
+			cmd += "get secret " + resourceName + " -o go-template='{{range $k, $v := .data}}{{$k}}: {{$v | base64decode}}{{\"\\n\"}}{{end}}'"
 		}
 	}
 

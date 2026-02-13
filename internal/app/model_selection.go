@@ -385,19 +385,51 @@ func (m Model) handleSecretFieldSelection() (tea.Model, tea.Cmd) {
 	title := selected.(ui.SimpleItem).Title()
 
 	if title == "Custom JSONPath" {
-		return m.navigateToCustomCommand(), nil // Reusing CustomCommandScreen for JSONPath for now, or I should have a dedicated one.
-		// Actually, let's just use it to enter any command, but maybe I want a dedicated JSONPath input.
-		// For now, I'll stick to the plan: if they want custom, they can use Custom Command or I add one more screen.
-		// Let's add a simple one for Custom Field.
+		return m.navigateToCustomCommand(), nil
 	}
 
 	if title == "---" {
 		return m, nil
 	}
 
-	// Build the command to extract and decode the field
-	// Using -o go-template with base64 decode for secret data fields
-	m.currentCommand = fmt.Sprintf("kubectl get secret %s -o go-template='{{index .data \"%s\" | base64decode}}'", m.selectedResourceName, title)
+	// Build the command to extract the field
+	// Different handling for data fields (base64 encoded) vs metadata fields (plain text)
+	var templateStr string
+
+	if strings.HasPrefix(title, "data.") {
+		// Data fields are base64 encoded and need decoding
+		fieldName := strings.TrimPrefix(title, "data.")
+		// Escape field name for shell - replace single quotes with '\''
+		escapedFieldName := strings.ReplaceAll(fieldName, "'", "'\\''")
+		templateStr = fmt.Sprintf("{{index .data \"%s\" | base64decode}}", escapedFieldName)
+	} else if strings.HasPrefix(title, "stringData.") {
+		// StringData fields are plain text
+		fieldName := strings.TrimPrefix(title, "stringData.")
+		escapedFieldName := strings.ReplaceAll(fieldName, "'", "'\\''")
+		templateStr = fmt.Sprintf("{{index .stringData \"%s\"}}", escapedFieldName)
+	} else if strings.HasPrefix(title, "metadata.labels.") {
+		// Label fields
+		fieldName := strings.TrimPrefix(title, "metadata.labels.")
+		escapedFieldName := strings.ReplaceAll(fieldName, "'", "'\\''")
+		templateStr = fmt.Sprintf("{{index .metadata.labels \"%s\"}}", escapedFieldName)
+	} else if strings.HasPrefix(title, "metadata.annotations.") {
+		// Annotation fields
+		fieldName := strings.TrimPrefix(title, "metadata.annotations.")
+		escapedFieldName := strings.ReplaceAll(fieldName, "'", "'\\''")
+		templateStr = fmt.Sprintf("{{index .metadata.annotations \"%s\"}}", escapedFieldName)
+	} else if title == "metadata.name" {
+		templateStr = "{{.metadata.name}}"
+	} else if title == "metadata.namespace" {
+		templateStr = "{{.metadata.namespace}}"
+	} else if title == "metadata.type" {
+		templateStr = "{{.type}}"
+	} else {
+		// Fallback: try as a data field with base64 decode
+		escapedTitle := strings.ReplaceAll(title, "'", "'\\''")
+		templateStr = fmt.Sprintf("{{index .data \"%s\" | base64decode}}", escapedTitle)
+	}
+
+	m.currentCommand = fmt.Sprintf("kubectl get secret %s -o go-template='%s'", m.selectedResourceName, templateStr)
 
 	if m.customNamespace != "" {
 		m.currentCommand += " -n " + m.customNamespace

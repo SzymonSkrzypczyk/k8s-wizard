@@ -87,16 +87,46 @@ func (m Model) fetchSecretKeys() tea.Cmd {
 		}
 
 		var secretData struct {
-			Data map[string]interface{} `json:"data"`
+			Metadata struct {
+				Name        string            `json:"name"`
+				Namespace   string            `json:"namespace"`
+				Labels      map[string]string `json:"labels"`
+				Annotations map[string]string `json:"annotations"`
+			} `json:"metadata"`
+			Data       map[string]interface{} `json:"data"`
+			StringData map[string]interface{} `json:"stringData"`
+			Type       string                 `json:"type"`
 		}
 		if err := json.Unmarshal([]byte(result.Output), &secretData); err != nil {
 			return secretKeysLoadedMsg{err: fmt.Errorf("failed to parse secret JSON: %v", err)}
 		}
 
-		keys := make([]string, 0, len(secretData.Data))
-		for k := range secretData.Data {
-			keys = append(keys, k)
+		// Collect all available fields
+		keys := make([]string, 0)
+
+		// Add metadata fields
+		keys = append(keys, "metadata.name", "metadata.namespace", "metadata.type")
+
+		// Add label keys if any
+		for k := range secretData.Metadata.Labels {
+			keys = append(keys, fmt.Sprintf("metadata.labels.%s", k))
 		}
+
+		// Add annotation keys if any
+		for k := range secretData.Metadata.Annotations {
+			keys = append(keys, fmt.Sprintf("metadata.annotations.%s", k))
+		}
+
+		// Add data fields (base64 encoded)
+		for k := range secretData.Data {
+			keys = append(keys, fmt.Sprintf("data.%s", k))
+		}
+
+		// Add stringData fields if any (plain text)
+		for k := range secretData.StringData {
+			keys = append(keys, fmt.Sprintf("stringData.%s", k))
+		}
+
 		return secretKeysLoadedMsg{keys: keys}
 	}
 }
