@@ -49,6 +49,8 @@ const (
 	CustomCommandScreen
 	// SecretFieldSelectionScreen allows selecting a field from a secret
 	SecretFieldSelectionScreen
+	// ClusterInfoScreen displays cluster information and metrics
+	ClusterInfoScreen
 )
 
 // ResourceType represents the type of Kubernetes resource

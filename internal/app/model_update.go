@@ -207,6 +207,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.navigateToSecretFieldSelection(msg.keys), nil
+
+	case clusterInfoLoadedMsg:
+		if msg.err != nil {
+			m.err = fmt.Errorf("Failed to load cluster info: %v", msg.err)
+			m.viewport.SetContent(fmt.Sprintf("Error loading cluster information:\n\n%v\n\nPress 'Esc' to go back", msg.err))
+			return m, nil
+		}
+
+		// Format and display cluster info
+		content := formatClusterInfoForDisplay(msg.info, m.width)
+		m.viewport.SetContent(content)
+		return m, nil
 	}
 
 	return m, nil
@@ -392,6 +404,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "r":
+		// Refresh cluster info if in cluster info screen
+		if m.currentScreen == ClusterInfoScreen {
+			m.viewport.SetContent("Refreshing cluster information...\n\nThis may take a few moments.")
+			return m, m.loadClusterInfo()
+		}
 		// Rename favourite if in favourites list
 		if m.currentScreen == FavouritesListScreen && m.favStore != nil {
 			idx := m.list.Index()
@@ -438,6 +455,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case CommandHelpScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	case ClusterConnectivityScreen:
+		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
+	case ClusterInfoScreen:
 		m.viewport, cmd = ui.UpdateViewport(m.viewport, msg)
 	case SavedOutputVersionsScreen:
 		cmd = nil

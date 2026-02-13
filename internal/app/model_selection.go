@@ -24,6 +24,9 @@ func (m Model) handleMainMenuSelection() (tea.Model, tea.Cmd) {
 		return m.navigateToResourceSelection(), nil
 	case "Custom Command":
 		return m.navigateToCustomCommand(), nil
+	case "Cluster Info":
+		m = m.navigateToClusterInfo()
+		return m, m.loadClusterInfo()
 	case "Favourites":
 		return m.navigateToFavouritesList(), nil
 	case "Command History":

@@ -31,6 +31,13 @@ func (m Model) checkClusterConnectivity() tea.Cmd {
 	}
 }
 
+func (m Model) loadClusterInfo() tea.Cmd {
+	return func() tea.Msg {
+		info, err := m.kubectlClient.GetClusterInfo()
+		return clusterInfoLoadedMsg{info: info, err: err}
+	}
+}
+
 func (m Model) fetchPodNames() tea.Cmd {
 	return func() tea.Msg {
 		names, err := m.kubectlClient.ListPodNames()

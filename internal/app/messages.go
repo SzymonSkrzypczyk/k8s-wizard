@@ -68,3 +68,9 @@ type secretKeysLoadedMsg struct {
 	keys []string
 	err  error
 }
+
+// clusterInfoLoadedMsg is sent when cluster information has been fetched
+type clusterInfoLoadedMsg struct {
+	info *kubectl.ClusterInfo
+	err  error
+}

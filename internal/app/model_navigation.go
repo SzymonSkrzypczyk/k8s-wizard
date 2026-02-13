@@ -13,6 +13,7 @@ func (m Model) navigateToMainMenu() Model {
 	items := []list.Item{
 		ui.NewSimpleItem("Run Command", "Execute kubectl commands"),
 		ui.NewSimpleItem("Custom Command", "Build an advanced kubectl command"),
+		ui.NewSimpleItem("Cluster Info", "View cluster information and metrics"),
 		ui.NewSimpleItem("Favourites", "View and run saved commands"),
 		ui.NewSimpleItem("Command History", "View and re-run previous commands"),
 		ui.NewSimpleItem("Saved Outputs", "View previously saved outputs"),
@@ -295,6 +296,8 @@ func (m Model) navigateBack() Model {
 		return m.navigateToFlagsSelection()
 	case CommandHelpScreen:
 		return m.navigateToCommandPreview()
+	case ClusterInfoScreen:
+		return m.navigateToMainMenu()
 	case ClusterConnectivityScreen:
 		return m.navigateToMainMenu()
 	case CommandHistoryScreen:
@@ -339,4 +342,16 @@ func (m Model) navigateBack() Model {
 	default:
 		return m.navigateToMainMenu()
 	}
+}
+
+// navigateToClusterInfo navigates to the cluster info screen and triggers data loading
+func (m Model) navigateToClusterInfo() Model {
+	m.previousScreen = m.currentScreen
+	m.currentScreen = ClusterInfoScreen
+
+	// Initialize viewport with loading message
+	m.viewport = ui.NewViewport(m.width, m.height-6)
+	m.viewport.SetContent("Loading cluster information...\n\nThis may take a few moments.")
+
+	return m
 }

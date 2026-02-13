@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/k8s-wizard/internal/kubectl"
 )
 
 // View renders the UI (required by Bubble Tea).
@@ -52,6 +54,9 @@ func (m Model) View() string {
 		s.WriteString(strings.Repeat("─", m.width) + "\n")
 		s.WriteString(m.viewport.View())
 		s.WriteString("\n\nPress 'Esc' to go back | ↑↓ to scroll")
+
+	case ClusterInfoScreen:
+		s.WriteString(m.renderClusterInfo())
 
 	case CommandHistoryScreen:
 		s.WriteString(m.list.View())
@@ -175,5 +180,105 @@ func (m Model) renderSavedOutputVersionsTable() string {
 	sb.WriteString("←→ select | Enter view | d delete | r rename | Esc back")
 	sb.WriteString("\n")
 	sb.WriteString("Selected: " + versions[idx])
+	return sb.String()
+}
+
+// renderClusterInfo renders the cluster information screen with metrics
+func (m Model) renderClusterInfo() string {
+	var sb strings.Builder
+
+	sb.WriteString("Cluster Information\n")
+	sb.WriteString(strings.Repeat("═", m.width) + "\n\n")
+
+	// Check if we have cluster info in the viewport content
+	if m.viewport.Height == 0 {
+		sb.WriteString("Loading cluster information...\n\n")
+		sb.WriteString("Press 'Esc' to go back")
+		return sb.String()
+	}
+
+	// Display the viewport content (which contains the formatted cluster info)
+	sb.WriteString(m.viewport.View())
+	sb.WriteString("\n\nPress 'r' to refresh | 'Esc' to go back | ↑↓ to scroll")
+
+	return sb.String()
+}
+
+// formatClusterInfoForDisplay formats ClusterInfo into a beautiful display string
+func formatClusterInfoForDisplay(info *kubectl.ClusterInfo, width int) string {
+	var sb strings.Builder
+
+	// Header with context
+	sb.WriteString("📊 Cluster Overview\n")
+	sb.WriteString(strings.Repeat("─", width) + "\n")
+	sb.WriteString(fmt.Sprintf("Context: %s\n", info.Context))
+	if info.Version != "" {
+		sb.WriteString(fmt.Sprintf("Version: %s\n", info.Version))
+	}
+	sb.WriteString("\n")
+
+	// Cluster Summary
+	sb.WriteString("🔧 Cluster Summary\n")
+	sb.WriteString(strings.Repeat("─", width) + "\n")
+	sb.WriteString(fmt.Sprintf("  Nodes:       %d total, %d ready\n", info.TotalNodes, info.ReadyNodes))
+	sb.WriteString(fmt.Sprintf("  Namespaces:  %d\n", info.NamespaceCount))
+	sb.WriteString(fmt.Sprintf("  Pods:        %d\n", info.TotalPods))
+	sb.WriteString("\n")
+
+	// Resource Capacity
+	sb.WriteString("💾 Total Resources\n")
+	sb.WriteString(strings.Repeat("─", width) + "\n")
+	sb.WriteString(fmt.Sprintf("  CPU:         %s (Allocatable: %s)\n", info.TotalCPU, info.AllocatableCPU))
+	sb.WriteString(fmt.Sprintf("  Memory:      %s (Allocatable: %s)\n", info.TotalMemory, info.AllocatableMemory))
+	sb.WriteString("\n")
+
+	// Node Details
+	if len(info.Nodes) > 0 {
+		sb.WriteString("🖥️  Node Details\n")
+		sb.WriteString(strings.Repeat("─", width) + "\n")
+
+		for i, node := range info.Nodes {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+
+			// Node header with status indicator
+			statusIcon := "✅"
+			if node.Status != "Ready" {
+				statusIcon = "❌"
+			}
+			sb.WriteString(fmt.Sprintf("%s %s\n", statusIcon, node.Name))
+
+			// Node details
+			sb.WriteString(fmt.Sprintf("  Status:      %s\n", node.Status))
+			sb.WriteString(fmt.Sprintf("  Roles:       %s\n", node.Roles))
+			if node.InternalIP != "" {
+				sb.WriteString(fmt.Sprintf("  Internal IP: %s\n", node.InternalIP))
+			}
+			sb.WriteString(fmt.Sprintf("  Version:     %s\n", node.Version))
+
+			// Resources
+			sb.WriteString(fmt.Sprintf("  CPU:         %s (Allocatable: %s)\n",
+				node.CPUCapacity, node.CPUAllocatable))
+			sb.WriteString(fmt.Sprintf("  Memory:      %s (Allocatable: %s)\n",
+				node.MemoryCapacity, node.MemoryAllocatable))
+
+			// Usage (if available)
+			if node.CPUUsage != "" {
+				sb.WriteString(fmt.Sprintf("  CPU Usage:   %s\n", node.CPUUsage))
+			}
+			if node.MemoryUsage != "" {
+				sb.WriteString(fmt.Sprintf("  Memory Usage: %s\n", node.MemoryUsage))
+			}
+
+			// Pods
+			sb.WriteString(fmt.Sprintf("  Pods:        %s / %s\n", node.PodCount, node.PodCapacity))
+		}
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString(strings.Repeat("─", width) + "\n")
+	sb.WriteString("💡 Tip: Metrics require metrics-server to be installed in the cluster\n")
+
 	return sb.String()
 }
