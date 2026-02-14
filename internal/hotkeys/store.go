@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/storage"
 )
 
 const hotkeysFileName = "kube-wizard-hotkeys.json"
@@ -63,8 +64,13 @@ func (s *Store) Load() error {
 	return nil
 }
 
-// Save writes bindings to disk.
+// Save writes bindings to disk atomically.
 func (s *Store) Save() error {
+	// Create backup before saving
+	if err := storage.Backup(s.filePath); err != nil {
+		// Log error but continue saving
+	}
+
 	bindings := make([]Binding, 0, len(s.bindings))
 	for _, b := range s.bindings {
 		bindings = append(bindings, b)
@@ -75,7 +81,7 @@ func (s *Store) Save() error {
 		return err
 	}
 
-	return os.WriteFile(s.filePath, data, 0644)
+	return storage.WriteAtomic(s.filePath, data)
 }
 
 // Get returns a binding for a key.

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/storage"
 )
 
 const historyFileName = "kube-wizard-history.json"
@@ -58,14 +59,19 @@ func (s *Store) Load() error {
 	return nil
 }
 
-// Save writes history to disk.
+// Save writes history to disk atomically.
 func (s *Store) Save() error {
+	// Create backup before saving
+	if err := storage.Backup(s.filePath); err != nil {
+		// Log error but continue saving
+	}
+
 	data, err := json.MarshalIndent(s.entries, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.filePath, data, 0644)
+	return storage.WriteAtomic(s.filePath, data)
 }
 
 // Add adds a new command to history.
