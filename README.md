@@ -33,9 +33,21 @@ A terminal-based wizard for running common kubectl commands with an intuitive, g
 
 ## Installation
 
+### Using `go install` (Recommended)
+
+You can install the latest version of `kube-wizard` directly using Go:
+
+```bash
+go install github.com/SzymonSkrzypczyk/k8s-wizard/cmd/kube-wizard@latest
+```
+
+Ensure your `GOBIN` directory (usually `$HOME/go/bin` or `%USERPROFILE%\go\bin`) is in your system's `PATH`.
+
+### From Source
+
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/SzymonSkrzypczyk/k8s-wizard.git
 cd k8s-wizard
 
 # Download dependencies
@@ -51,7 +63,7 @@ go build -o kube-wizard ./cmd/kube-wizard
 On Windows:
 ```bash
 go build -o kube-wizard.exe ./cmd/kube-wizard
-kube-wizard.exe
+.\kube-wizard.exe
 ```
 
 ## Usage

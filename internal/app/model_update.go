@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/k8s-wizard/internal/hotkeys"
-	"github.com/k8s-wizard/internal/ui"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/hotkeys"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
 )
 
 // Init initializes the model (required by Bubble Tea).

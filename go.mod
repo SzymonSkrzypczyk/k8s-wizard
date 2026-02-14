@@ -1,4 +1,4 @@
-module github.com/k8s-wizard
+module github.com/SzymonSkrzypczyk/k8s-wizard
 
 go 1.21
 

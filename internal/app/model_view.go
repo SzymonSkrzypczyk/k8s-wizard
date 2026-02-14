@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/k8s-wizard/internal/kubectl"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/kubectl"
 )
 
 // View renders the UI (required by Bubble Tea).

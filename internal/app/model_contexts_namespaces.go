@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/k8s-wizard/internal/ui"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
 )
 
 // Contexts & namespaces navigation and selection.

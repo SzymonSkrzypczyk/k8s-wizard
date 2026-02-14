@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/k8s-wizard/internal/kubectl"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/kubectl"
 )
 
 // Test that when a command finishes executing, the full output that will be

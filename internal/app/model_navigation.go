@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/k8s-wizard/internal/ui"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
 )
 
 // Navigation handlers for the main application flow.

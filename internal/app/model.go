@@ -4,11 +4,11 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/k8s-wizard/internal/favourites"
-	"github.com/k8s-wizard/internal/history"
-	"github.com/k8s-wizard/internal/hotkeys"
-	"github.com/k8s-wizard/internal/kubectl"
-	"github.com/k8s-wizard/internal/ui"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/favourites"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/history"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/hotkeys"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/kubectl"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
 )
 
 // Model represents the application state.

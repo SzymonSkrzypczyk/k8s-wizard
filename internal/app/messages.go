@@ -1,6 +1,6 @@
 package app
 
-import "github.com/k8s-wizard/internal/kubectl"
+import "github.com/SzymonSkrzypczyk/k8s-wizard/internal/kubectl"
 
 // Messages are custom events sent through the Bubble Tea update loop
 

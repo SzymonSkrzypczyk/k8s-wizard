@@ -3,13 +3,33 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/k8s-wizard/internal/app"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/app"
 )
 
-const version = "0.1.0"
+var version = "0.1.0"
+
+func getDetailedVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version
+	}
+
+	// Use ldflags version if it matches the default/placeholder
+	// or if we want to prioritize it.
+	if version != "0.1.0" && version != "" {
+		return version
+	}
+
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+
+	return version
+}
 
 func printUsage() {
 	fmt.Println("kube-wizard - interactive kubectl command wizard")
@@ -62,7 +82,7 @@ func main() {
 	}
 
 	if showVersion {
-		fmt.Printf("kube-wizard version %s\n", version)
+		fmt.Printf("kube-wizard version %s\n", getDetailedVersion())
 		return
 	}
 

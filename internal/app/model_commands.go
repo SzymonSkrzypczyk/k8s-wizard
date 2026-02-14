@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/k8s-wizard/internal/kubectl"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/kubectl"
 )
 
 // Command execution and kubectl helpers.

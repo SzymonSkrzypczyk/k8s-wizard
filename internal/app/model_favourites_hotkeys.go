@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/k8s-wizard/internal/favourites"
-	"github.com/k8s-wizard/internal/ui"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/favourites"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
 )
 
 // Helpers and navigation for favourites and hotkeys.
