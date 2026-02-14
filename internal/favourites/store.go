@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/storage"
 )
 
 const favouritesFileName = "kube-wizard-favourites.json"
@@ -49,14 +50,19 @@ func (s *Store) Load() error {
 	return json.Unmarshal(data, &s.favourites)
 }
 
-// Save writes favourites to disk
+// Save writes favourites to disk atomically
 func (s *Store) Save() error {
+	// Create backup before saving
+	if err := storage.Backup(s.filePath); err != nil {
+		// Log error but continue saving
+	}
+
 	data, err := json.MarshalIndent(s.favourites, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.filePath, data, 0644)
+	return storage.WriteAtomic(s.filePath, data)
 }
 
 // Add adds a new favourite and saves to disk
