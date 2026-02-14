@@ -34,7 +34,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update viewport dimensions
 		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - 4
+		m.viewport.Height = msg.Height - 6 // Leave more space for header/footer
+
+		if !m.ready {
+			m.ready = true
+		}
 
 		return m, nil
 

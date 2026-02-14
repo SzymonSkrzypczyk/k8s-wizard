@@ -11,7 +11,7 @@ import (
 
 // View renders the UI (required by Bubble Tea).
 func (m Model) View() string {
-	if m.width == 0 {
+	if !m.ready {
 		return "Initializing..."
 	}
 

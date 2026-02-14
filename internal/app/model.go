@@ -60,6 +60,9 @@ type Model struct {
 
 	// Default namespace applied to commands when no explicit namespace flag is chosen
 	defaultNamespace string
+
+	// Ready indicates if the TUI is initialized with terminal dimensions
+	ready bool
 }
 
 // NewModel creates and initializes a new application model.
