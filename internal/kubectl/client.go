@@ -26,6 +26,50 @@ func (c *Client) CheckKubectlInstalled() error {
 	return nil
 }
 
+// GetKubectlVersion returns the client version of kubectl
+func (c *Client) GetKubectlVersion() (int, int, error) {
+	cmd := exec.Command("kubectl", "version", "--client", "-o", "json")
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	err := cmd.Run()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get kubectl version: %w", err)
+	}
+
+	var versionInfo struct {
+		ClientVersion struct {
+			Major string `json:"major"`
+			Minor string `json:"minor"`
+		} `json:"clientVersion"`
+	}
+
+	if err := json.Unmarshal(stdout.Bytes(), &versionInfo); err != nil {
+		// Fallback for older kubectl that might not output JSON correctly or in different format
+		return 0, 0, fmt.Errorf("failed to parse kubectl version: %w", err)
+	}
+
+	major, err := strconv.Atoi(versionInfo.ClientVersion.Major)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid major version: %s", versionInfo.ClientVersion.Major)
+	}
+
+	// Minor version can sometimes contain symbols like +, so we need to clean it
+	minorStr := versionInfo.ClientVersion.Minor
+	for i, char := range minorStr {
+		if char < '0' || char > '9' {
+			minorStr = minorStr[:i]
+			break
+		}
+	}
+
+	minor, err := strconv.Atoi(minorStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid minor version: %s", versionInfo.ClientVersion.Minor)
+	}
+
+	return major, minor, nil
+}
+
 // CommandResult holds the output of a kubectl command
 type CommandResult struct {
 	Command string

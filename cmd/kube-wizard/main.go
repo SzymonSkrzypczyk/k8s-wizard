@@ -96,6 +96,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Check kubectl version compatibility
+	major, minor, err := kubectlClient.GetKubectlVersion()
+	if err == nil {
+		if major < 1 || (major == 1 && minor < 21) {
+			fmt.Fprintf(os.Stderr, "Warning: kubectl version %d.%d is older than the recommended v1.21+\n", major, minor)
+			fmt.Fprintln(os.Stderr, "Some features may not work as expected.")
+			fmt.Fprintln(os.Stderr)
+		}
+	}
+
 	// Initialize the Bubble Tea program with our app model
 	p := tea.NewProgram(
 		app.NewModel(),
