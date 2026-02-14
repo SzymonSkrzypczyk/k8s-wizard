@@ -2,19 +2,25 @@ package kubectl
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Client wraps kubectl command execution
-type Client struct{}
+type Client struct {
+	Timeout time.Duration
+}
 
-// NewClient creates a new kubectl client
+// NewClient creates a new kubectl client with default timeout
 func NewClient() *Client {
-	return &Client{}
+	return &Client{
+		Timeout: 30 * time.Second,
+	}
 }
 
 // CheckKubectlInstalled verifies if kubectl is available in the PATH
@@ -258,9 +264,12 @@ func (c *Client) ExecuteRaw(commandStr string) (CommandResult, error) {
 	return c.execute(args...)
 }
 
-// execute runs a kubectl command and captures output
+// execute runs a kubectl command and captures output with timeout
 func (c *Client) execute(args ...string) (CommandResult, error) {
-	cmd := exec.Command("kubectl", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -270,6 +279,14 @@ func (c *Client) execute(args ...string) (CommandResult, error) {
 	cmdStr := "kubectl " + strings.Join(args, " ")
 
 	err := cmd.Run()
+
+	// Check if the command was cancelled due to timeout
+	if ctx.Err() == context.DeadlineExceeded {
+		return CommandResult{
+			Command: cmdStr,
+			Error:   fmt.Sprintf("command timed out after %v", c.Timeout),
+		}, ctx.Err()
+	}
 
 	result := CommandResult{
 		Command: cmdStr,
