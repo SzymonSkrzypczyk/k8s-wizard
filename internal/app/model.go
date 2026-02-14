@@ -123,3 +123,7 @@ func NewModel() Model {
 		err:           err,
 	}
 }
+// GetKubectlClient returns the internal kubectl client.
+func (m Model) GetKubectlClient() *kubectl.Client {
+	return m.kubectlClient
+}

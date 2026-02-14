@@ -89,6 +89,13 @@ func main() {
 	// For now, the config path is parsed but not yet wired into the app.
 	_ = configPath
 
+	// Check if kubectl is installed
+	kubectlClient := app.NewModel().GetKubectlClient()
+	if err := kubectlClient.CheckKubectlInstalled(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Initialize the Bubble Tea program with our app model
 	p := tea.NewProgram(
 		app.NewModel(),

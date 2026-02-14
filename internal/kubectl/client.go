@@ -17,6 +17,15 @@ func NewClient() *Client {
 	return &Client{}
 }
 
+// CheckKubectlInstalled verifies if kubectl is available in the PATH
+func (c *Client) CheckKubectlInstalled() error {
+	_, err := exec.LookPath("kubectl")
+	if err != nil {
+		return fmt.Errorf("kubectl not found in PATH: %w. Please ensure kubectl is installed and configured", err)
+	}
+	return nil
+}
+
 // CommandResult holds the output of a kubectl command
 type CommandResult struct {
 	Command string
