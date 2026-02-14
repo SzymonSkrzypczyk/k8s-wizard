@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/logger"
 )
 
 // Client wraps kubectl command execution
@@ -277,15 +279,23 @@ func (c *Client) execute(args ...string) (CommandResult, error) {
 
 	// Build command string for display
 	cmdStr := "kubectl " + strings.Join(args, " ")
+	logger.Info("Executing command: %s", cmdStr)
 
 	err := cmd.Run()
 
 	// Check if the command was cancelled due to timeout
 	if ctx.Err() == context.DeadlineExceeded {
+		logger.Error("Command timed out: %s", cmdStr)
 		return CommandResult{
 			Command: cmdStr,
 			Error:   fmt.Sprintf("command timed out after %v", c.Timeout),
 		}, ctx.Err()
+	}
+
+	if err != nil {
+		logger.Error("Command failed: %s, error: %v, stderr: %s", cmdStr, err, stderr.String())
+	} else {
+		logger.Info("Command succeeded: %s", cmdStr)
 	}
 
 	result := CommandResult{

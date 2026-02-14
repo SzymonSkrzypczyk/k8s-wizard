@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/app"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/logger"
 )
 
 var version = "0.1.0"
@@ -44,6 +45,17 @@ func printUsage() {
 }
 
 func main() {
+	// Initialize logger
+	logPath, err := logger.Init()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize logger: %v\n", err)
+	} else {
+		defer logger.Close()
+		// We could print the log path if we wanted to be helpful, 
+		// but let's keep it quiet for now unless it's needed.
+		_ = logPath
+	}
+
 	// Minimal hand-rolled flag parsing to keep behaviour explicit and avoid
 	// starting the TUI when the user only wants help or version information.
 	args := os.Args[1:]

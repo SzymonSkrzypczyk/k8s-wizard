@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/hotkeys"
+	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/logger"
 	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
 )
 
@@ -21,6 +22,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		logger.Debug("Key pressed: %s (Screen: %s)", msg.String(), m.currentScreen.String())
 		return m.handleKeyPress(msg)
 
 	case tea.WindowSizeMsg:

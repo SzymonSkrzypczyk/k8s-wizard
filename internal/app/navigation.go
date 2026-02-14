@@ -133,6 +133,72 @@ func (a Action) String() string {
 	}
 }
 
+// String returns the string representation of a Screen
+func (s Screen) String() string {
+	switch s {
+	case MainMenuScreen:
+		return "Main Menu"
+	case ResourceSelectionScreen:
+		return "Resource Selection"
+	case ActionSelectionScreen:
+		return "Action Selection"
+	case ResourceNameSelectionScreen:
+		return "Resource Name Selection"
+	case FlagsSelectionScreen:
+		return "Flags Selection"
+	case NamespaceInputScreen:
+		return "Namespace Input"
+	case CommandPreviewScreen:
+		return "Command Preview"
+	case CommandOutputScreen:
+		return "Command Output"
+	case CommandHelpScreen:
+		return "Command Help"
+	case HotkeysListScreen:
+		return "Hotkeys List"
+	case HotkeyBindScreen:
+		return "Hotkey Bind"
+	case ClusterConnectivityScreen:
+		return "Cluster Connectivity"
+	case CommandHistoryScreen:
+		return "Command History"
+	case FavouritesListScreen:
+		return "Favourites List"
+	case SaveFavouriteScreen:
+		return "Save Favourite"
+	case RenameFavouriteScreen:
+		return "Rename Favourite"
+	case SaveOutputNameScreen:
+		return "Save Output Name"
+	case SavedOutputsListScreen:
+		return "Saved Outputs List"
+	case SavedOutputVersionsScreen:
+		return "Saved Output Versions"
+	case SavedOutputViewScreen:
+		return "Saved Output View"
+	case RenameSavedOutputScreen:
+		return "Rename Saved Output"
+	case ContextsNamespacesMenuScreen:
+		return "Contexts & Namespaces Menu"
+	case ContextsListScreen:
+		return "Contexts List"
+	case NamespacesListScreen:
+		return "Namespaces List"
+	case CustomCommandScreen:
+		return "Custom Command"
+	case SecretFieldSelectionScreen:
+		return "Secret Field Selection"
+	case ClusterInfoScreen:
+		return "Cluster Info"
+	case DeleteConfirmationScreen:
+		return "Delete Confirmation"
+	case PortInputScreen:
+		return "Port Input"
+	default:
+		return "Unknown"
+	}
+}
+
 // buildCommand constructs the kubectl command string based on selections
 func buildCommand(resource ResourceType, action Action, resourceName string, flags []string) string {
 	cmd := "kubectl "
