@@ -218,8 +218,14 @@ func (m Model) navigateToRenameSavedOutputGroup(base string) Model {
 }
 
 func (m Model) handleSaveOutputName() (tea.Model, tea.Cmd) {
-	name := m.textInput.Value()
+	name := SanitizeInput(m.textInput.Value())
 	if name == "" {
+		return m, nil
+	}
+
+	// Validate output name
+	if !ValidateSafeName(name) {
+		m.err = fmt.Errorf("invalid output name: alphanumeric, spaces, dashes, dots, underscores only")
 		return m, nil
 	}
 
@@ -252,6 +258,27 @@ func (m Model) handleSavedOutputVersionSelection() (tea.Model, tea.Cmd) {
 		idx = len(versions) - 1
 	}
 	return m.viewSavedOutput(versions[idx])
+}
+
+func (m Model) handleRenameSavedOutput() (tea.Model, tea.Cmd) {
+	newName := SanitizeInput(m.textInput.Value())
+	if newName == "" {
+		return m, nil
+	}
+
+	// Validate output name
+	if !ValidateSafeName(newName) {
+		m.err = fmt.Errorf("invalid output name: alphanumeric, spaces, dashes, dots, underscores only")
+		return m, nil
+	}
+
+	newName = strings.TrimSuffix(newName, ".txt")
+	if m.renamingSavedOutputIsGroup {
+		m.savedOutputsReturnScreen = SavedOutputVersionsScreen
+		m.savedOutputsReturnBase = newName
+		return m, m.renameSavedOutputGroup(m.renamingSavedOutput, newName)
+	}
+	return m, m.renameSavedOutput(m.renamingSavedOutput, newName)
 }
 
 func (m Model) loadSavedOutputs() (tea.Model, tea.Cmd) {

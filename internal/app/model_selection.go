@@ -342,6 +342,12 @@ func (m Model) handleSaveFavourite() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Validate favourite name
+	if !ValidateSafeName(name) {
+		m.err = fmt.Errorf("invalid favourite name: alphanumeric, spaces, dashes, dots, underscores only")
+		return m, nil
+	}
+
 	if m.favStore == nil {
 		m.err = fmt.Errorf("favourites store not available")
 		return m.navigateToMainMenu(), nil
@@ -357,6 +363,12 @@ func (m Model) handleRenameFavourite() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Validate favourite name
+	if !ValidateSafeName(newName) {
+		m.err = fmt.Errorf("invalid favourite name: alphanumeric, spaces, dashes, dots, underscores only")
+		return m, nil
+	}
+
 	if m.favStore == nil {
 		m.err = fmt.Errorf("favourites store not available")
 		return m.navigateToMainMenu(), nil
@@ -365,23 +377,16 @@ func (m Model) handleRenameFavourite() (tea.Model, tea.Cmd) {
 	return m, m.renameFavourite(m.renamingFavouriteIdx, newName)
 }
 
-func (m Model) handleRenameSavedOutput() (tea.Model, tea.Cmd) {
-	newName := strings.TrimSpace(m.textInput.Value())
-	if newName == "" {
-		return m, nil
-	}
-	newName = strings.TrimSuffix(newName, ".txt")
-	if m.renamingSavedOutputIsGroup {
-		m.savedOutputsReturnScreen = SavedOutputVersionsScreen
-		m.savedOutputsReturnBase = newName
-		return m, m.renameSavedOutputGroup(m.renamingSavedOutput, newName)
-	}
-	return m, m.renameSavedOutput(m.renamingSavedOutput, newName)
-}
 
 func (m Model) handleNamespaceInput() (tea.Model, tea.Cmd) {
-	namespace := m.textInput.Value()
+	namespace := SanitizeInput(m.textInput.Value())
 	if namespace == "" {
+		return m, nil
+	}
+
+	// Validate namespace name (DNS-1123 label)
+	if !ValidateResourceName(namespace) {
+		m.err = fmt.Errorf("invalid namespace name: must be a valid Kubernetes DNS-1123 label")
 		return m, nil
 	}
 
@@ -503,7 +508,7 @@ func (m Model) handlePortInput() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleCustomCommandInput() (tea.Model, tea.Cmd) {
-	input := strings.TrimSpace(m.textInput.Value())
+	input := SanitizeInput(m.textInput.Value())
 	if input == "" {
 		return m, nil
 	}
