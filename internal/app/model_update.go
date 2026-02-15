@@ -6,11 +6,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/hotkeys"
 	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/logger"
 	"github.com/SzymonSkrzypczyk/k8s-wizard/internal/ui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Init initializes the model (required by Bubble Tea).
@@ -225,20 +226,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		content := formatClusterInfoForDisplay(msg.info, m.width)
 		m.viewport.SetContent(content)
 		return m, nil
+
+	case clearErrorMsg:
+		// Clear the error message
+		m.err = nil
+		return m, nil
 	}
 
 	return m, nil
 }
 
 // toggleTheme switches between dark and light themes
-func (m Model) toggleTheme() Model {
+func (m Model) toggleTheme() (Model, tea.Cmd) {
 	if m.theme == ThemeDark {
 		m.theme = ThemeLight
 	} else {
 		m.theme = ThemeDark
 	}
+	// Set a temporary success message that will be cleared automatically
 	m.err = fmt.Errorf("✓ Switched to %s theme", m.theme.String())
-	return m
+	// Return a command to clear the error after 5 seconds
+	return m, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return clearErrorMsg{}
+	})
 }
 
 // handleKeyPress processes keyboard input.
@@ -464,7 +474,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "t":
 		// Toggle theme
-		return m.toggleTheme(), nil
+		return m.toggleTheme()
 	}
 
 	// Pass other keys to the active component

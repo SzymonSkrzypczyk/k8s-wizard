@@ -2,6 +2,9 @@ package app
 
 import "github.com/SzymonSkrzypczyk/k8s-wizard/internal/kubectl"
 
+// clearErrorMsg is sent to clear the error message after a delay
+type clearErrorMsg struct{}
+
 // Messages are custom events sent through the Bubble Tea update loop
 
 // resourceNamesLoadedMsg is sent when resource names have been fetched for selection
