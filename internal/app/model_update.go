@@ -230,6 +230,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// toggleTheme switches between dark and light themes
+func (m Model) toggleTheme() Model {
+	if m.theme == ThemeDark {
+		m.theme = ThemeLight
+	} else {
+		m.theme = ThemeDark
+	}
+	m.err = fmt.Errorf("✓ Switched to %s theme", m.theme.String())
+	return m
+}
+
 // handleKeyPress processes keyboard input.
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -450,6 +461,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+
+	case "t":
+		// Toggle theme
+		return m.toggleTheme(), nil
 	}
 
 	// Pass other keys to the active component

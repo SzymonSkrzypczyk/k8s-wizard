@@ -19,14 +19,14 @@ func (m Model) View() string {
 
 	// Show error if present
 	if m.err != nil {
-		s.WriteString(fmt.Sprintf("⚠️  Error: %v\n\n", m.err))
+		s.WriteString(m.GetErrorStyle().Render(fmt.Sprintf("⚠️  Error: %v\n\n", m.err)))
 	}
 
 	// Render current screen
 	switch m.currentScreen {
 	case CommandOutputScreen:
-		s.WriteString("Command Output\n")
-		s.WriteString(strings.Repeat("─", m.width) + "\n")
+		s.WriteString(m.GetHeaderStyle().Render("Command Output") + "\n")
+		s.WriteString(m.GetBorderStyle().Render(strings.Repeat("─", m.width)) + "\n")
 		s.WriteString(fmt.Sprintf("Command: %s\n\n", m.currentCommand))
 		s.WriteString(m.viewport.View())
 		s.WriteString("\n\nPress 's' to save output | 'q' to return to main menu | ↑↓ to scroll")
@@ -127,9 +127,13 @@ func (m Model) View() string {
 
 	// Add context-sensitive help text at the bottom
 	if m.currentScreen == MainMenuScreen {
-		s.WriteString("\n\nPress 'q' to quit")
+		s.WriteString("\n\n")
+		s.WriteString(m.GetHelpStyle().Render("Press 'q' to quit | 't' to toggle theme "))
+		s.WriteString(m.GetHelpStyle().Render(fmt.Sprintf("(Current: %s Mode)", m.theme.String())))
 	} else {
-		s.WriteString("\n\nPress 'Esc' to go back | 'q' to quit")
+		s.WriteString("\n\n")
+		s.WriteString(m.GetHelpStyle().Render("Press 'Esc' to go back | 'q' to quit | 't' to toggle theme "))
+		s.WriteString(m.GetHelpStyle().Render(fmt.Sprintf("(Current: %s Mode)", m.theme.String())))
 	}
 
 	return s.String()

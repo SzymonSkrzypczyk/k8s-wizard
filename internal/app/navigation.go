@@ -1,5 +1,27 @@
 package app
 
+// Theme represents the color theme for the application
+type Theme int
+
+const (
+	// ThemeDark is the dark color theme
+	ThemeDark Theme = iota
+	// ThemeLight is the light color theme
+	ThemeLight
+)
+
+// String returns the string representation of a Theme
+func (t Theme) String() string {
+	switch t {
+	case ThemeDark:
+		return "Dark"
+	case ThemeLight:
+		return "Light"
+	default:
+		return "Unknown"
+	}
+}
+
 // Screen represents different screens in the wizard
 type Screen int
 

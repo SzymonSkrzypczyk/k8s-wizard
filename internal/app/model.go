@@ -63,6 +63,9 @@ type Model struct {
 
 	// Ready indicates if the TUI is initialized with terminal dimensions
 	ready bool
+	
+	// Theme controls the color scheme (dark or light)
+	theme Theme
 }
 
 // NewModel creates and initializes a new application model.
@@ -124,6 +127,7 @@ func NewModel() Model {
 		textInput:     ti,
 		viewport:      ui.NewViewport(0, 0),
 		err:           err,
+		theme:         ThemeDark, // Default to dark theme
 	}
 }
 // GetKubectlClient returns the internal kubectl client.
